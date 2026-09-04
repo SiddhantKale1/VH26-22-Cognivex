@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { analyzeError } from "../services/api";
+import BackButton from "../components/BackButton";
 
 interface ErrorResult {
     error_code: string;
@@ -38,7 +39,9 @@ function ErrorAnalysis() {
     };
 
     return (
+
         <div className="error-page">
+            <BackButton />
             <div className="error-header">
                 <h1>Error Analysis</h1>
 

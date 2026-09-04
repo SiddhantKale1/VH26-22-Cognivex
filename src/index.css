@@ -611,3 +611,30 @@ body {
 .result-section.sources {
   padding-bottom: 25px;
 }
+
+/* Back Button */
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  margin-bottom: 20px;
+
+  padding: 9px 15px;
+
+  background: white;
+  color: #374151;
+
+  border: 1px solid #d1d5db;
+  border-radius: 7px;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.back-button:hover {
+  background: #f3f4f6;
+}

@@ -1,5 +1,7 @@
+import BackButton from "../components/BackButton";
 import { useEffect, useState } from "react";
 import { getDocuments } from "../services/api";
+
 
 interface Document {
     id: string;
@@ -33,6 +35,7 @@ function Documents() {
     return (
         <div className="documents-page">
             <div className="documents-header">
+                <BackButton />
                 <div>
                     <h1>Documents</h1>
                     <p>

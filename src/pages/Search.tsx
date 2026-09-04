@@ -1,5 +1,7 @@
+import BackButton from "../components/BackButton";
 import { useState } from "react";
 import { askQuestion } from "../services/api";
+
 
 function Search() {
     const [question, setQuestion] = useState("");
@@ -31,6 +33,7 @@ function Search() {
 
     return (
         <div className="search-page">
+            <BackButton />
             <div className="search-header">
                 <h1>Ask Machine Assistant</h1>
 
