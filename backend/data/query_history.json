@@ -1,5 +1,337 @@
 [
   {
+    "query_id": "diag_20260905_063013_3335",
+    "timestamp": "2026-09-05T06:30:13.335961Z",
+    "question": "What does F09999 mean?",
+    "machine_model_filter": null,
+    "detected_machine": "Siemens Industrial Equipment",
+    "error_code": "F09999",
+    "severity": "Insufficient Data",
+    "confidence_score": 0.35,
+    "confidence_level": "Insufficient",
+    "meaning": "I'm sorry, but I don't have enough information to explain what F09999 means.",
+    "possible_causes": [],
+    "recommended_actions": [],
+    "causes_count": 0,
+    "actions_count": 0,
+    "citations_count": 0,
+    "citations": [],
+    "retrieved_chunks": [],
+    "error_analysis": {
+      "outcome": "Incorrect / Low Grounding",
+      "root_cause": "Retrieval",
+      "explanation": "Dense vector and BM25 similarity scores fell below threshold.",
+      "is_grounded": false
+    },
+    "response_time_ms": 351.3
+  },
+  {
+    "query_id": "diag_20260905_062939_9575",
+    "timestamp": "2026-09-05T06:29:39.575181Z",
+    "question": "My CPU's ERROR LED is flashing red but RUN/STOP is off \u2014 what's going on?",
+    "machine_model_filter": "siemens-s7-1200",
+    "detected_machine": "SIMATIC S7-1200 PLC",
+    "error_code": "LED",
+    "severity": "Insufficient data in manual",
+    "confidence_score": 0.78,
+    "confidence_level": "High",
+    "meaning": "The manual does not contain a specific entry for the combination of a flashing red ERROR LED and an OFF RUN/STOP LED. The provided excerpts define the flashing red ERROR LED as indicating an error (such as internal CPU error, memory card error, or configuration error) and the OFF RUN/STOP LED as indicating that power is off. However, the manual states that if power is off, all LEDs should be off. Therefore, the manual does not provide sufficient information to explain this specific contradictory state.",
+    "possible_causes": [],
+    "recommended_actions": [],
+    "causes_count": 0,
+    "actions_count": 0,
+    "citations_count": 6,
+    "citations": [
+      {
+        "manual_name": "S7-1200 PLC",
+        "filename": "s71200_system_manual_en-US_en-US.pdf",
+        "section": "Diagnostics, Status LEDs & Error Buffer",
+        "page_number": 861,
+        "snippet": "CPU powers up, it checks for CMs and addresses them. The diagnostic LED begins to flash green. This means that the CPU has addressed the CM, but has not yet provided the configuration to it. The CPU downloads the configu...",
+        "relevance_score": 0.6794,
+        "match_type": "hybrid (semantic + BM25)"
+      },
+      {
+        "manual_name": "S7-1200 PLC",
+        "filename": "s71200_system_manual_en-US.pdf",
+        "section": "Table 15-2\u00a0\u00a0Status LEDs for a signal module (SM)",
+        "page_number": 1048,
+        "snippet": "Description STOP/RUN Yellow / Green...",
+        "relevance_score": 0.6584,
+        "match_type": "hybrid (semantic + BM25)"
+      },
+      {
+        "manual_name": "S7-1200 PLC",
+        "filename": "s71200_system_manual_en-US_en-US.pdf",
+        "section": "15.1 Status LEDs\n\nS7-1200 Programmable controller\n1",
+        "page_number": 1066,
+        "snippet": "Online and diagnostic tools  15.1 Status LEDs...",
+        "relevance_score": 0.7226,
+        "match_type": "hybrid (semantic + BM25)"
+      },
+      {
+        "manual_name": "S7-1200 PLC",
+        "filename": "s71200_system_manual_en-US_en-US.pdf",
+        "section": "15.1\nStatus LEDs\nThe CPU and the I/O modules use LE",
+        "page_number": 1065,
+        "snippet": "S7-1200 Programmable controller System Manual, 01/2015, A5E02486680-AH 1065...",
+        "relevance_score": 0.7573,
+        "match_type": "hybrid (semantic + BM25)"
+      },
+      {
+        "manual_name": "S7-1200 PLC",
+        "filename": "s71200_system_manual_en-US_en-US.pdf",
+        "section": "1\nRUN/STOP\nColor 1",
+        "page_number": 385,
+        "snippet": "ret_val := LED( laddr:=_word_in_, LED:=_uint_in_);...",
+        "relevance_score": 0.6215,
+        "match_type": "hybrid (semantic + BM25)"
+      },
+      {
+        "manual_name": "S7-1200 PLC",
+        "filename": "s71200_system_manual_en-US.pdf",
+        "section": "15.1\nStatus LEDs\nThe CPU and the I/O modules use LE",
+        "page_number": 1047,
+        "snippet": "Online and diagnostic tools 15 15.1...",
+        "relevance_score": 0.7637,
+        "match_type": "hybrid (semantic + BM25)"
+      }
+    ],
+    "retrieved_chunks": [
+      {
+        "chunk_id": "s71200_system_manual_en-US_en-US.pdf",
+        "source_file": "s71200_system_manual_en-US_en-US.pdf",
+        "page_number": 861,
+        "relevance_score": 0.679,
+        "snippet": "CPU powers up, it checks for CMs and addresses them. The diagnostic LED begins to flash green. This means that the CPU has addressed the CM, but has not yet provided the configuration to it. The CPU downloads the configu...",
+        "match_type": "hybrid (semantic + BM25)"
+      },
+      {
+        "chunk_id": "s71200_system_manual_en-US.pdf",
+        "source_file": "s71200_system_manual_en-US.pdf",
+        "page_number": 1048,
+        "relevance_score": 0.658,
+        "snippet": "Description STOP/RUN Yellow / Green...",
+        "match_type": "hybrid (semantic + BM25)"
+      },
+      {
+        "chunk_id": "s71200_system_manual_en-US_en-US.pdf",
+        "source_file": "s71200_system_manual_en-US_en-US.pdf",
+        "page_number": 1066,
+        "relevance_score": 0.723,
+        "snippet": "Online and diagnostic tools  15.1 Status LEDs...",
+        "match_type": "hybrid (semantic + BM25)"
+      },
+      {
+        "chunk_id": "s71200_system_manual_en-US_en-US.pdf",
+        "source_file": "s71200_system_manual_en-US_en-US.pdf",
+        "page_number": 1065,
+        "relevance_score": 0.757,
+        "snippet": "S7-1200 Programmable controller System Manual, 01/2015, A5E02486680-AH 1065...",
+        "match_type": "hybrid (semantic + BM25)"
+      },
+      {
+        "chunk_id": "s71200_system_manual_en-US_en-US.pdf",
+        "source_file": "s71200_system_manual_en-US_en-US.pdf",
+        "page_number": 385,
+        "relevance_score": 0.622,
+        "snippet": "ret_val := LED( laddr:=_word_in_, LED:=_uint_in_);...",
+        "match_type": "hybrid (semantic + BM25)"
+      },
+      {
+        "chunk_id": "s71200_system_manual_en-US.pdf",
+        "source_file": "s71200_system_manual_en-US.pdf",
+        "page_number": 1047,
+        "relevance_score": 0.764,
+        "snippet": "Online and diagnostic tools 15 15.1...",
+        "match_type": "hybrid (semantic + BM25)"
+      }
+    ],
+    "error_analysis": {
+      "outcome": "Unable to Answer",
+      "root_cause": "Unknown / Out of Scope",
+      "explanation": "Query code or symptom is outside active manufacturer documentation.",
+      "is_grounded": true
+    },
+    "response_time_ms": 3984.7
+  },
+  {
+    "query_id": "diag_20260905_062929_9854",
+    "timestamp": "2026-09-05T06:29:29.854933Z",
+    "question": "My CPU's ERROR LED is flashing red but RUN/STOP is off \u2014 what's going on?",
+    "machine_model_filter": null,
+    "detected_machine": "Multiple Systems Detected",
+    "error_code": "LED",
+    "severity": "Disambiguation Required",
+    "confidence_score": 0.5,
+    "confidence_level": "Ambiguous",
+    "meaning": "Ambiguous Identifier: 'LED' appears in multiple machine manuals.",
+    "possible_causes": [
+      "The code 'LED' has distinct technical definitions depending on whether you are working on a PLC or a Frequency Inverter / Drive."
+    ],
+    "recommended_actions": [
+      "Please select your target machine above to receive the exact, manufacturer-certified repair procedure."
+    ],
+    "causes_count": 1,
+    "actions_count": 1,
+    "citations_count": 0,
+    "citations": [],
+    "retrieved_chunks": [],
+    "error_analysis": {
+      "outcome": "Partially Correct",
+      "root_cause": "Retrieval Ambiguity",
+      "explanation": "Multiple machine contexts detected or partial match requiring clarification.",
+      "is_grounded": false
+    },
+    "response_time_ms": 97.4
+  },
+  {
+    "query_id": "diag_20260905_062833_3426",
+    "timestamp": "2026-09-05T06:28:33.426709Z",
+    "question": "What does F09999 mean?",
+    "machine_model_filter": null,
+    "detected_machine": "Siemens Industrial Equipment",
+    "error_code": "F09999",
+    "severity": "Insufficient Data",
+    "confidence_score": 0.35,
+    "confidence_level": "Insufficient",
+    "meaning": "I'm sorry, but I don't have enough information to answer that question.",
+    "possible_causes": [],
+    "recommended_actions": [],
+    "causes_count": 0,
+    "actions_count": 0,
+    "citations_count": 0,
+    "citations": [],
+    "retrieved_chunks": [],
+    "error_analysis": {
+      "outcome": "Incorrect / Low Grounding",
+      "root_cause": "Retrieval",
+      "explanation": "Dense vector and BM25 similarity scores fell below threshold.",
+      "is_grounded": false
+    },
+    "response_time_ms": 11591.8
+  },
+  {
+    "query_id": "diag_20260905_062741_1763",
+    "timestamp": "2026-09-05T06:27:41.763553Z",
+    "question": "What does F01650 mean and which manual is that from?",
+    "machine_model_filter": null,
+    "detected_machine": "Siemens Industrial Equipment",
+    "error_code": "F01650",
+    "severity": "Fault",
+    "confidence_score": 0.98,
+    "confidence_level": "High",
+    "meaning": "F01650 indicates that an acceptance test for the safety functions is required. This fault is documented in the SINAMICS G120 Safety Integrated Function Manual (G120_Safety_fct_man_0920_en-US.pdf) and the SINAMICS G120 CU240BE2 Operating Instructions (G120_CU240BE2_op_instr_0117_en-US.pdf).",
+    "possible_causes": [
+      "Safety functions have been modified or commissioned and require formal acceptance testing.",
+      "A component replacement (such as the Control Unit) has occurred, triggering the need for a reduced acceptance test."
+    ],
+    "recommended_actions": [
+      "Step 1: Perform the acceptance tests for the safety functions as described in the manual (referenced on Page 186 of the Safety Function Manual).",
+      "Step 2: Create the acceptance certificate to confirm the safety functions are operational.",
+      "Step 3: To confirm the fault, switch the Control Unit power supply off and on again."
+    ],
+    "causes_count": 2,
+    "actions_count": 3,
+    "citations_count": 5,
+    "citations": [
+      {
+        "manual_name": "SINAMICS Drive",
+        "filename": "G120_Safety_fct_man_0920_en-US.pdf",
+        "section": "6.14 List of alarms and faults\nSafety Integrated -",
+        "page_number": 300,
+        "snippet": "F01649 Internal software error 1. Switch off the Control Unit power supply and then on again....",
+        "relevance_score": 1.0,
+        "match_type": "exact (F01650)"
+      },
+      {
+        "manual_name": "SINAMICS Drive",
+        "filename": "G120_CU240BE2_op_instr_0117_en-US.pdf",
+        "section": "11. Faults, Alarms & Diagnostic Messages",
+        "page_number": 387,
+        "snippet": "Number Cause Remedy...",
+        "relevance_score": 0.9785,
+        "match_type": "exact (F01650)"
+      },
+      {
+        "manual_name": "SINAMICS Drive",
+        "filename": "G120_CU240BE2_op_instr_0117_en-US.pdf",
+        "section": "9.2 Replacing inverter components\nConverter with t",
+        "page_number": 401,
+        "snippet": "10.After loading, check whether the inverter outputs alarm A01028. \u2013 Alarm A01028:...",
+        "relevance_score": 0.9324,
+        "match_type": "exact (F01650)"
+      },
+      {
+        "manual_name": "S7-1200 PLC",
+        "filename": "s71200_system_manual_en-US_en-US.pdf",
+        "section": "6\nSystem Manual",
+        "page_number": 6,
+        "snippet": "Preface  ...",
+        "relevance_score": 0.5756,
+        "match_type": "semantic"
+      },
+      {
+        "manual_name": "S7-1200 PLC",
+        "filename": "s71200_system_manual_en-US_en-US.pdf",
+        "section": "Diagnostics, Status LEDs & Error Buffer",
+        "page_number": 1158,
+        "snippet": "Technical specifications  A.6 CPU 1217C...",
+        "relevance_score": 0.5618,
+        "match_type": "semantic"
+      }
+    ],
+    "retrieved_chunks": [
+      {
+        "chunk_id": "G120_Safety_fct_man_0920_en-US.pdf",
+        "source_file": "G120_Safety_fct_man_0920_en-US.pdf",
+        "page_number": 300,
+        "relevance_score": 1.0,
+        "snippet": "F01649 Internal software error 1. Switch off the Control Unit power supply and then on again....",
+        "match_type": "exact (F01650)"
+      },
+      {
+        "chunk_id": "G120_CU240BE2_op_instr_0117_en-US.pdf",
+        "source_file": "G120_CU240BE2_op_instr_0117_en-US.pdf",
+        "page_number": 387,
+        "relevance_score": 0.979,
+        "snippet": "Number Cause Remedy...",
+        "match_type": "exact (F01650)"
+      },
+      {
+        "chunk_id": "G120_CU240BE2_op_instr_0117_en-US.pdf",
+        "source_file": "G120_CU240BE2_op_instr_0117_en-US.pdf",
+        "page_number": 401,
+        "relevance_score": 0.932,
+        "snippet": "10.After loading, check whether the inverter outputs alarm A01028. \u2013 Alarm A01028:...",
+        "match_type": "exact (F01650)"
+      },
+      {
+        "chunk_id": "s71200_system_manual_en-US_en-US.pdf",
+        "source_file": "s71200_system_manual_en-US_en-US.pdf",
+        "page_number": 6,
+        "relevance_score": 0.576,
+        "snippet": "Preface  ...",
+        "match_type": "semantic"
+      },
+      {
+        "chunk_id": "s71200_system_manual_en-US_en-US.pdf",
+        "source_file": "s71200_system_manual_en-US_en-US.pdf",
+        "page_number": 1158,
+        "relevance_score": 0.562,
+        "snippet": "Technical specifications  A.6 CPU 1217C...",
+        "match_type": "semantic"
+      }
+    ],
+    "error_analysis": {
+      "outcome": "Successful",
+      "root_cause": "None",
+      "explanation": "High-confidence hybrid retrieval with verified document page citations.",
+      "is_grounded": true
+    },
+    "response_time_ms": 22159.7
+  },
+  {
     "query_id": "diag_20260905_062021_1480",
     "timestamp": "2026-09-05T06:20:21.480664Z",
     "question": "What does F01650 mean and which manual is that from?",

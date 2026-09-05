@@ -10,7 +10,6 @@ import {
   X,
   ChevronRight,
   Database,
-  Calculator,
   Sliders
 } from "lucide-react";
 import {
@@ -27,7 +26,7 @@ export const GraphsSection: React.FC<GraphsSectionProps> = ({ onSelectQuery }) =
   const [analytics, setAnalytics] = useState<ComprehensiveAnalytics | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedAuditQuery, setSelectedAuditQuery] = useState<QueryAuditDetail | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<"all" | "quality" | "errors" | "statistics">("all");
+  const [activeSubTab, setActiveSubTab] = useState<"all" | "quality" | "errors">("all");
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -51,7 +50,6 @@ export const GraphsSection: React.FC<GraphsSectionProps> = ({ onSelectQuery }) =
   const queryOutcomes = analytics?.query_outcomes;
   const rootCauses = analytics?.error_root_causes;
   const machineErrors = analytics?.machine_wise_errors;
-  const wilsonCI = analytics?.confidence_intervals;
 
   const maxPdfBar = Math.max(...(pdfStats?.chart_data.map(d => d.count) || [1]), 1);
   const maxQueryOutcome = Math.max(...(queryOutcomes?.chart_data.map(d => d.count) || [1]), 1);
@@ -67,7 +65,7 @@ export const GraphsSection: React.FC<GraphsSectionProps> = ({ onSelectQuery }) =
             Analytics & Error Analysis Cockpit
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Empirical RAG telemetry computed directly from real PDF manuals, OCR pages, query outcomes, and 95% Wilson Confidence Intervals.
+            Empirical RAG telemetry computed directly from real PDF manuals, OCR pages, query outcomes, and root cause distributions.
           </p>
         </div>
 
@@ -97,14 +95,6 @@ export const GraphsSection: React.FC<GraphsSectionProps> = ({ onSelectQuery }) =
               }`}
             >
               Error Causes
-            </button>
-            <button
-              onClick={() => setActiveSubTab("statistics")}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                activeSubTab === "statistics" ? "bg-white text-slate-900 shadow-xs border border-slate-200" : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              95% Wilson CI
             </button>
           </div>
 
@@ -409,63 +399,6 @@ export const GraphsSection: React.FC<GraphsSectionProps> = ({ onSelectQuery }) =
                 </div>
               );
             })}
-          </div>
-        </div>
-      )}
-
-      {/* SECTION 4: 95% WILSON CONFIDENCE INTERVALS */}
-      {(activeSubTab === "all" || activeSubTab === "statistics") && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <Calculator className="w-5 h-5 text-indigo-600" />
-                6. 95% Wilson Confidence Intervals
-              </h3>
-              <p className="text-xs text-slate-500">
-                Rigorous binomial confidence bounds (z=1.96) for measurable binary operational rates
-              </p>
-            </div>
-            <span className="text-[11px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg">
-              Method: Wilson Score (z=1.96)
-            </span>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-[11px]">
-                <tr>
-                  <th className="py-3 px-3">Metric Name</th>
-                  <th className="py-3 px-3">Description</th>
-                  <th className="py-3 px-3">Point Rate</th>
-                  <th className="py-3 px-3">95% Confidence Interval</th>
-                  <th className="py-3 px-3">Sample Size (n)</th>
-                  <th className="py-3 px-3">Statistical Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {wilsonCI?.metrics.map((m, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-3 font-bold text-slate-900 whitespace-nowrap">{m.metric_name}</td>
-                    <td className="py-3 px-3 text-slate-600">{m.description}</td>
-                    <td className="py-3 px-3 font-mono font-bold text-slate-900">{m.rate_pct}%</td>
-                    <td className="py-3 px-3 font-mono text-indigo-700 font-bold whitespace-nowrap">
-                      {m.is_valid ? `[${m.ci_lower_pct}% – ${m.ci_upper_pct}%]` : "N/A"}
-                    </td>
-                    <td className="py-3 px-3 font-mono text-slate-500 whitespace-nowrap">{m.sample_size}</td>
-                    <td className="py-3 px-3 whitespace-nowrap">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        m.is_valid
-                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
-                          : "bg-slate-100 text-slate-600 border border-slate-200"
-                      }`}>
-                        {m.is_valid ? "Statistically Valid" : "N/A (n < 5)"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         </div>
       )}
