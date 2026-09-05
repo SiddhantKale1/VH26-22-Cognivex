@@ -13,3 +13,4 @@ pillow>=10.0.0
 pytesseract>=0.3.10
 psycopg2-binary>=2.9.9
 sqlalchemy>=2.0.0
+minio>=7.2.0

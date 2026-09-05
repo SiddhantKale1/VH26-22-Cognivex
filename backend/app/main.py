@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 import time
 from app.generation.generator import RAGGenerator
 from app.storage.history import query_history_logger
-from app.storage.postgres_store import postgres_store
+from app.storage.minio_store import minio_store
 
 # Load environment variables
 load_dotenv()
@@ -23,23 +23,23 @@ logger = logging.getLogger("machine-assistant-api")
 
 from contextlib import asynccontextmanager
 
-# Pre-warm RAG Generator and PostgreSQL on server startup
+# Pre-warm RAG Generator and MinIO S3 Object Store on server startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Pre-warming RAG Generator and ChromaDB model...")
     get_generator()
     logger.info("RAG Generator is pre-warmed and ready.")
     try:
-        logger.info("Initializing PostgreSQL Document Store...")
-        res = postgres_store.initialize_database()
-        logger.info(f"PostgreSQL store status: {res.get('status')} (db: {res.get('database')})")
+        logger.info("Testing MinIO / S3-Compatible Object Store connection...")
+        status = minio_store.test_connection()
+        logger.info(f"MinIO S3 store status: {status.get('storage_type')} (Bucket: {status.get('bucket')}, Mode: {status.get('mode')})")
     except Exception as e:
-        logger.warning(f"PostgreSQL auto-initialization notice: {e}")
+        logger.warning(f"MinIO S3 initialization notice: {e}")
     yield
 
 app = FastAPI(
     title="RAG Machine Troubleshooting Assistant API",
-    description="Intelligent RAG assistant for industrial machinery manuals powered by Groq and ChromaDB.",
+    description="Intelligent RAG assistant for industrial machinery manuals powered by Groq, ChromaDB, and MinIO S3 Object Storage.",
     version="1.0.0",
     lifespan=lifespan
 )
@@ -210,7 +210,7 @@ def handle_error_analysis(req: ErrorRequest):
 
 @app.post("/api/upload")
 async def upload_document(file: UploadFile = File(...)):
-    """Upload a new PDF machine manual, persist in PostgreSQL, extract text, and index into ChromaDB."""
+    """Upload a new PDF machine manual, persist in MinIO S3 Bucket, extract text, and index into ChromaDB."""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF manual files (.pdf) are supported.")
     
@@ -223,18 +223,18 @@ async def upload_document(file: UploadFile = File(...)):
     with open(save_path, "wb") as f:
         f.write(content)
 
-    # Persist raw PDF binary directly into PostgreSQL raw_manuals table
-    pg_record = None
+    # Persist raw PDF binary directly into MinIO S3 bucket (cognivex-manuals)
+    s3_record = None
     try:
-        pg_record = postgres_store.save_manual(
+        s3_record = minio_store.save_manual(
             filename=file.filename,
             content=content,
             machine_family="Industrial Equipment",
             status="ingested"
         )
-        logger.info(f"Persisted '{file.filename}' into PostgreSQL raw_manuals table (ID: {pg_record['id']})")
-    except Exception as pg_err:
-        logger.warning(f"Could not persist {file.filename} to PostgreSQL: {pg_err}")
+        logger.info(f"Persisted '{file.filename}' into MinIO S3 bucket '{minio_store.bucket}' (ID: {s3_record['id']})")
+    except Exception as s3_err:
+        logger.warning(f"Could not persist {file.filename} to MinIO: {s3_err}")
         
     try:
         from app.ingestion.pipeline import ingest_document
@@ -251,59 +251,36 @@ async def upload_document(file: UploadFile = File(...)):
         return {
             "status": "success",
             "filename": file.filename,
-            "document_id": pg_record.get("id") if pg_record else None,
-            "stored_in_postgres": pg_record is not None,
+            "document_id": s3_record.get("id") if s3_record else None,
+            "bucket": minio_store.bucket,
+            "storage_type": s3_record.get("storage_type", "minio_s3") if s3_record else "local_emulation",
             "chunks_added": len(new_chunks),
-            "message": f"Successfully stored in PostgreSQL and indexed '{file.filename}' ({len(new_chunks)} chunks indexed)."
+            "message": f"Successfully stored in MinIO S3 bucket and indexed '{file.filename}' ({len(new_chunks)} chunks indexed)."
         }
     except Exception as e:
         logger.error(f"Failed to ingest uploaded document {file.filename}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process PDF manual: {str(e)}")
 
 
+@app.get("/api/minio/status")
 @app.get("/api/postgres/status")
-def get_postgres_status():
-    """Returns PostgreSQL connection status, database name, and stored manuals count."""
-    return postgres_store.test_connection()
+def get_object_store_status():
+    """Returns MinIO S3 connection status, endpoint, bucket name, and stored manuals count."""
+    return minio_store.test_connection()
 
 
 @app.get("/api/manuals")
-def list_postgres_manuals():
-    """List all PDF manuals stored in PostgreSQL raw_manuals table."""
-    pg_manuals = postgres_store.list_manuals()
-    if pg_manuals:
-        return pg_manuals
-    # Fallback to local raw documents if PG is uninitialized
-    return list_documents()
+def list_s3_manuals():
+    """List all PDF manuals stored in the MinIO S3 bucket."""
+    return minio_store.list_manuals()
 
 
 @app.get("/api/manuals/{doc_id}/stream")
 def stream_manual_pdf(doc_id: str):
-    """Streams raw PDF binary bytes directly from PostgreSQL BYTEA column."""
-    result = postgres_store.get_manual_bytes(doc_id)
+    """Streams raw PDF binary bytes directly from MinIO S3 bucket or local S3 emulation."""
+    result = minio_store.get_manual_bytes(doc_id)
     if not result:
-        # Also check by filename if doc_id happens to be a filename
-        all_manuals = postgres_store.list_manuals()
-        for m in all_manuals:
-            if m.get("filename") == doc_id or m.get("id") == doc_id:
-                result = postgres_store.get_manual_bytes(m["id"])
-                break
-    
-    if not result:
-        # Fallback to local disk file if not in DB
-        base_dir = Path(__file__).resolve().parents[1]
-        raw_dir = base_dir / "data" / "raw"
-        local_path = raw_dir / doc_id
-        if not local_path.exists() and not (raw_dir / f"{doc_id}.pdf").exists():
-            raise HTTPException(status_code=404, detail="Manual not found in PostgreSQL or disk storage.")
-        target = local_path if local_path.exists() else (raw_dir / f"{doc_id}.pdf")
-        with open(target, "rb") as f:
-            pdf_bytes = f.read()
-        return StreamingResponse(
-            io.BytesIO(pdf_bytes),
-            media_type="application/pdf",
-            headers={"Content-Disposition": f'inline; filename="{target.name}"'}
-        )
+        raise HTTPException(status_code=404, detail="Manual not found in MinIO S3 bucket.")
     
     pdf_bytes, filename, mime_type = result
     return StreamingResponse(
@@ -315,6 +292,17 @@ def stream_manual_pdf(doc_id: str):
             "Cache-Control": "public, max-age=86400"
         }
     )
+
+
+@app.get("/api/manuals/{doc_id}/presigned-url")
+def get_manual_presigned_url(doc_id: str):
+    """Generates a secure, temporary S3 presigned URL for direct viewing or downloading."""
+    url = minio_store.get_presigned_url(doc_id)
+    return {
+        "url": url or f"/api/manuals/{doc_id}/stream",
+        "is_direct_s3": url is not None,
+        "bucket": minio_store.bucket
+    }
 
 
 @app.get("/api/documents")

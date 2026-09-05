@@ -271,6 +271,16 @@ export interface QueryAnalyticsMetrics {
     top_error_codes: { error_code: string; count: number; machine: string }[];
 }
 
+export interface MinioStatus {
+    connected: boolean;
+    storage_type: string;
+    endpoint?: string;
+    bucket?: string;
+    manuals_count?: number;
+    mode?: string;
+    error?: string;
+}
+
 export interface PostgresStatus {
     connected: boolean;
     version?: string;
@@ -337,26 +347,30 @@ export const clearQueryHistory = async (): Promise<boolean> => {
     }
 };
 
-// Get PostgreSQL health & manuals status
-export const getPostgresStatus = async (): Promise<PostgresStatus> => {
+// Get MinIO S3 Object Store status
+export const getMinioStatus = async (): Promise<MinioStatus> => {
     try {
-        const response = await api.get("/api/postgres/status");
+        const response = await api.get("/api/minio/status");
         return response.data;
     } catch (error: any) {
         return {
             connected: false,
-            error: error.message || "Failed to reach PostgreSQL endpoint",
+            storage_type: "Local S3 Emulation",
+            bucket: "cognivex-manuals",
+            error: error.message || "Failed to reach MinIO status endpoint",
         };
     }
 };
 
-// Get list of manuals from PostgreSQL
+export const getPostgresStatus = getMinioStatus;
+
+// Get list of manuals from MinIO S3
 export const getPostgresManuals = async (): Promise<PostgresManual[]> => {
     try {
         const response = await api.get("/api/manuals");
         return response.data;
     } catch (error) {
-        console.error("Error fetching PostgreSQL manuals:", error);
+        console.error("Error fetching manuals:", error);
         return [];
     }
 };
@@ -365,6 +379,16 @@ export const getPostgresManuals = async (): Promise<PostgresManual[]> => {
 export const getManualStreamUrl = (docId: string): string => {
     const base = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
     return `${base}/api/manuals/${encodeURIComponent(docId)}/stream`;
+};
+
+// Get S3 presigned URL for direct viewing
+export const getManualPresignedUrl = async (docId: string): Promise<string> => {
+    try {
+        const response = await api.get(`/api/manuals/${encodeURIComponent(docId)}/presigned-url`);
+        return response.data.url;
+    } catch {
+        return getManualStreamUrl(docId);
+    }
 };
 
 export interface SystemStats {

@@ -18,15 +18,15 @@ import {
   getDocuments, 
   uploadDocument, 
   deleteDocument, 
-  getPostgresStatus,
+  getMinioStatus,
   getManualStreamUrl,
   type DocumentInfo,
-  type PostgresStatus
+  type MinioStatus
 } from "../services/api";
 
 export const UploadSection: React.FC = () => {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
-  const [pgStatus, setPgStatus] = useState<PostgresStatus | null>(null);
+  const [pgStatus, setPgStatus] = useState<MinioStatus | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [uploading, setUploading] = useState<boolean>(false);
   const [deletingFilename, setDeletingFilename] = useState<string | null>(null);
@@ -42,12 +42,12 @@ export const UploadSection: React.FC = () => {
   const fetchDocs = async () => {
     setLoading(true);
     try {
-      const [docs, pg] = await Promise.all([
+      const [docs, minio] = await Promise.all([
         getDocuments(),
-        getPostgresStatus(),
+        getMinioStatus(),
       ]);
       setDocuments(docs);
-      setPgStatus(pg);
+      setPgStatus(minio);
     } catch (err) {
       console.error(err);
     } finally {
@@ -144,25 +144,25 @@ export const UploadSection: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      {/* PostgreSQL Storage Banner */}
+      {/* MinIO / S3 Object Storage Banner */}
       <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
             <Database className="w-5 h-5" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-slate-900">PostgreSQL Raw PDF Storage Layer</h3>
+              <h3 className="text-sm font-bold text-slate-900">MinIO / S3-Compatible Object Storage</h3>
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                 pgStatus?.connected 
                   ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                  : "bg-amber-100 text-amber-800 border border-amber-300"
+                  : "bg-blue-100 text-blue-800 border border-blue-300"
               }`}>
-                {pgStatus?.connected ? "● PostgreSQL Connected" : "● Local Fallback Active"}
+                {pgStatus?.connected ? "● MinIO S3 Bucket Connected" : "● Local S3 Emulation Active"}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Target Table: <code className="font-mono text-slate-700 font-bold">raw_manuals (BYTEA)</code> • DB: <code className="font-mono text-slate-700 font-bold">{pgStatus?.database || "cognivex_rag"}</code> • Direct binary streaming enabled
+              Bucket: <code className="font-mono text-slate-700 font-bold">cognivex-manuals</code> • Endpoint: <code className="font-mono text-slate-700 font-bold">{pgStatus?.endpoint || "localhost:9000"}</code> • S3 API & Presigned Streaming active
             </p>
           </div>
         </div>
@@ -173,7 +173,7 @@ export const UploadSection: React.FC = () => {
           className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 cursor-pointer shadow-xs shrink-0"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-amber-500" : ""}`} />
-          Sync Database
+          Sync Object Store
         </button>
       </div>
 
@@ -186,7 +186,7 @@ export const UploadSection: React.FC = () => {
               Upload & Ingest Machine Manual
             </h2>
             <p className="text-sm text-slate-500">
-              Upload PDF operating instructions, system manuals, or fault catalogs. Manuals are persisted into PostgreSQL and automatically vectorized into ChromaDB.
+              Upload PDF operating instructions, system manuals, or fault catalogs. Manuals are stored in MinIO S3 bucket (<code className="font-mono text-slate-700 font-bold">cognivex-manuals</code>) and automatically vectorized into ChromaDB.
             </p>
           </div>
         </div>
