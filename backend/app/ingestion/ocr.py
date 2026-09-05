@@ -1,53 +1,129 @@
+"""
+Multi-Engine Industrial OCR Pipeline.
+Extracts structured text from scanned technical manuals, schematics, and table registers
+with automatic deskewing, CLAHE contrast enhancement, and multi-engine fallback.
+"""
+
+import logging
 import pymupdf
-import pytesseract
 
-from PIL import Image
+from .preprocessor import preprocess_for_ocr
+
+logger = logging.getLogger(__name__)
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
+try:
+    import pytesseract
+    PYTESSERACT_AVAILABLE = True
+except ImportError:
+    PYTESSERACT_AVAILABLE = False
+
+try:
+    import easyocr
+    EASYOCR_AVAILABLE = True
+    _easyocr_reader = None
+except ImportError:
+    EASYOCR_AVAILABLE = False
+    _easyocr_reader = None
 
 
-def needs_ocr(pages):
+def get_easyocr_reader():
+    """Lazily initialize EasyOCR reader."""
+    global _easyocr_reader
+    if _easyocr_reader is None and EASYOCR_AVAILABLE:
+        try:
+            logger.info("Initializing EasyOCR reader (English)...")
+            _easyocr_reader = easyocr.Reader(['en'], gpu=False)
+        except Exception as e:
+            logger.warning(f"Failed to initialize EasyOCR: {e}")
+            _easyocr_reader = None
+    return _easyocr_reader
+
+
+def needs_ocr(pages: list[dict], min_avg_chars: int = 50) -> bool:
     """
-    Determine whether a PDF probably needs OCR.
+    Determine whether a PDF is scanned or image-based and requires OCR.
+    Checks total character count and average characters per page.
     """
+    if not pages:
+        return True
 
-    total_characters = sum(
-        len(page["text"].strip())
-        for page in pages
-    )
+    total_characters = sum(len(page.get("text", "").strip()) for page in pages)
+    avg_chars = total_characters / len(pages)
 
-    return total_characters < 100
+    # If document has less than 100 total characters or avg page is nearly empty, trigger OCR
+    return total_characters < 100 or avg_chars < min_avg_chars
 
 
-def ocr_pdf(pdf_path: str):
+def ocr_page_image(image_obj) -> str:
     """
-    Run OCR on every page of a PDF.
+    Extract text from a single image using preprocessed multi-engine pipeline:
+    1. Preprocess image (deskew, CLAHE contrast, denoise).
+    2. Attempt Pytesseract extraction.
+    3. Attempt EasyOCR extraction if Pytesseract is not available or fails.
     """
+    processed_img = preprocess_for_ocr(image_obj)
+    text = ""
 
-    document = pymupdf.open(pdf_path)
+    # Engine 1: PyTesseract
+    if PYTESSERACT_AVAILABLE:
+        try:
+            custom_config = r'--oem 3 --psm 3'
+            text = pytesseract.image_to_string(processed_img, config=custom_config).strip()
+            if text:
+                return text
+        except Exception as e:
+            logger.debug(f"Pytesseract skipped: {e}")
 
+    # Engine 2: EasyOCR
+    reader = get_easyocr_reader()
+    if reader is not None:
+        try:
+            import numpy as np
+            img_np = np.array(processed_img)
+            results = reader.readtext(img_np, detail=0, paragraph=True)
+            text = "\n\n".join(results).strip()
+            if text:
+                return text
+        except Exception as e:
+            logger.debug(f"EasyOCR skipped: {e}")
+
+    return text
+
+
+def ocr_pdf(pdf_path: str, zoom: float = 2.0) -> list[dict]:
+    """
+    Execute end-to-end OCR on all pages of a PDF document:
+    1. Rasterize each page at high resolution (`zoom` x `zoom`).
+    2. Enhance contrast and straighten orientation.
+    3. Extract text and preserve 1-indexed page numbers.
+    """
+    logger.info(f"Starting OCR extraction on: {pdf_path}")
+    doc = pymupdf.open(pdf_path)
     pages = []
 
-    for page_number, page in enumerate(
-        document,
-        start=1
-    ):
+    for page_number, page in enumerate(doc, start=1):
+        pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
+        
+        extracted_text = ""
+        if PIL_AVAILABLE:
+            image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            extracted_text = ocr_page_image(image)
 
-        pix = page.get_pixmap(
-            matrix=pymupdf.Matrix(2, 2)
-        )
-
-        image = Image.frombytes(
-            "RGB",
-            [pix.width, pix.height],
-            pix.samples
-        )
-
-        text = pytesseract.image_to_string(image)
+        # Fallback to PyMuPDF's built-in text / OCR page if available
+        if not extracted_text:
+            extracted_text = page.get_text().strip()
 
         pages.append({
             "page_number": page_number,
-            "text": text
+            "text": extracted_text or "[Image Page / Circuit Schematic with no legible text]"
         })
 
-    document.close()
-
+    doc.close()
+    logger.info(f"Completed OCR on {len(pages)} pages.")
     return pages
