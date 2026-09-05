@@ -1,8 +1,7 @@
 """
 Comprehensive Analytics & Error Analysis Engine for Cognivex RAG.
 Computes real data metrics for PDF/OCR health, document quality ranking,
-query outcomes, root cause failure distribution, machine-wise error breakdown,
-and 95% Wilson Confidence Intervals.
+query outcomes, root cause failure distribution, and machine-wise error breakdown.
 """
 
 import json
@@ -23,63 +22,6 @@ RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 CHUNKS_FILE = PROCESSED_DIR / "chunks.json"
 HISTORY_FILE = DATA_DIR / "query_history.json"
-
-
-def wilson_score_interval(
-    successes: int,
-    total: int,
-    confidence_level: float = 0.95,
-    min_sample_size: int = 5
-) -> Dict[str, any]:
-    """
-    Calculate 95% Wilson score confidence interval for a binomial proportion.
-    Formula:
-      p_hat = successes / total
-      CI = (p_hat + z^2/(2n) +/- z * sqrt(p_hat*(1-p_hat)/n + z^2/(4n^2))) / (1 + z^2/n)
-    """
-    if total <= 0:
-        return {
-            "rate": 0.0,
-            "rate_pct": 0.0,
-            "ci_lower_pct": 0.0,
-            "ci_upper_pct": 0.0,
-            "sample_size": 0,
-            "is_valid": False,
-            "display": "N/A (No Samples, n=0)"
-        }
-
-    p_hat = successes / total
-
-    if total < min_sample_size:
-        return {
-            "rate": round(p_hat, 4),
-            "rate_pct": round(p_hat * 100, 1),
-            "ci_lower_pct": 0.0,
-            "ci_upper_pct": 0.0,
-            "sample_size": total,
-            "is_valid": False,
-            "display": f"N/A (Insufficient Sample Size: n={total})"
-        }
-
-    # z = 1.95996 for 95% confidence
-    z = 1.95996 if abs(confidence_level - 0.95) < 0.01 else 1.64485
-    z_sq = z * z
-    denominator = 1.0 + (z_sq / total)
-    center = p_hat + (z_sq / (2.0 * total))
-    spread = z * math.sqrt((p_hat * (1.0 - p_hat) / total) + (z_sq / (4.0 * total * total)))
-
-    lower = max(0.0, (center - spread) / denominator)
-    upper = min(1.0, (center + spread) / denominator)
-
-    return {
-        "rate": round(p_hat, 4),
-        "rate_pct": round(p_hat * 100, 1),
-        "ci_lower_pct": round(lower * 100, 1),
-        "ci_upper_pct": round(upper * 100, 1),
-        "sample_size": total,
-        "is_valid": True,
-        "display": f"{round(p_hat * 100, 1)}% [95% CI: {round(lower * 100, 1)}% – {round(upper * 100, 1)}%] (n={total})"
-    }
 
 
 class AnalyticsEngine:
@@ -568,65 +510,6 @@ class AnalyticsEngine:
             "machine_statistics": chart_data
         }
 
-    def get_wilson_confidence_intervals(self) -> Dict[str, any]:
-        """
-        6. 95% Wilson Confidence Intervals.
-        Calculates Wilson score intervals for binary rates:
-        - OCR Error Rate
-        - Query Failure Rate
-        - Answer Success Rate
-        - Hallucination Rate
-        - Retrieval Failure Rate
-        """
-        pdf_stats = self.get_pdf_ocr_errors()
-        query_stats = self.get_query_outcome_analysis()
-        root_causes = self.get_error_root_causes()
-
-        total_pages = pdf_stats.get("total_pages_scanned", 0)
-        failed_pages = pdf_stats.get("failed_pages_count", 0)
-
-        total_queries = query_stats.get("total_queries", 0)
-        successful_queries = query_stats.get("successful_count", 0)
-        failed_queries = (query_stats.get("incorrect_count", 0) + 
-                          query_stats.get("hallucinated_count", 0) + 
-                          query_stats.get("partially_correct_count", 0))
-        hallucinated_queries = query_stats.get("hallucinated_count", 0)
-        retrieval_failures = root_causes.get("root_causes", {}).get("retrieval", 0)
-
-        metrics_list = [
-            {
-                "metric_name": "OCR Error Rate",
-                "description": "Scanned or garbled pages requiring fallback",
-                **wilson_score_interval(failed_pages, total_pages, min_sample_size=5)
-            },
-            {
-                "metric_name": "Query Failure Rate",
-                "description": "Suboptimal, low-confidence or failed queries",
-                **wilson_score_interval(failed_queries, total_queries, min_sample_size=5)
-            },
-            {
-                "metric_name": "Answer Success Rate",
-                "description": "Fully grounded answers with verified citations",
-                **wilson_score_interval(successful_queries, total_queries, min_sample_size=5)
-            },
-            {
-                "metric_name": "Hallucination Rate",
-                "description": "Unsupported assertions without documentation",
-                **wilson_score_interval(hallucinated_queries, total_queries, min_sample_size=5)
-            },
-            {
-                "metric_name": "Retrieval Failure Rate",
-                "description": "Queries with zero or low-similarity chunks",
-                **wilson_score_interval(retrieval_failures, total_queries, min_sample_size=5)
-            }
-        ]
-
-        return {
-            "confidence_level": "95%",
-            "method": "Wilson Score Interval (z=1.96)",
-            "metrics": metrics_list
-        }
-
     def get_comprehensive_analytics(self) -> Dict[str, any]:
         """Returns the unified multi-module analytics payload for the dashboard."""
         pdf_ocr = self.get_pdf_ocr_errors()
@@ -634,7 +517,6 @@ class AnalyticsEngine:
         query_outcomes = self.get_query_outcome_analysis()
         root_causes = self.get_error_root_causes()
         machine_errors = self.get_machine_wise_errors()
-        wilson_ci = self.get_wilson_confidence_intervals()
 
         # Overall summary KPI cards
         tot_queries = query_outcomes.get("total_queries", 0)
@@ -657,10 +539,10 @@ class AnalyticsEngine:
             "document_quality": doc_quality,
             "query_outcomes": query_outcomes,
             "error_root_causes": root_causes,
-            "machine_wise_errors": machine_errors,
-            "confidence_intervals": wilson_ci
+            "machine_wise_errors": machine_errors
         }
 
 
 # Global singleton instance
 analytics_engine = AnalyticsEngine()
+

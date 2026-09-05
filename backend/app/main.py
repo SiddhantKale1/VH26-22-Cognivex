@@ -200,7 +200,7 @@ def clear_query_history():
 
 @app.get("/api/analytics/comprehensive")
 def get_comprehensive_analytics():
-    """Retrieve full calculated analytics covering PDF/OCR errors, Document Quality ranking, Query Outcomes, Root Causes, Machine-wise Errors, and 95% Wilson Confidence Intervals."""
+    """Retrieve full calculated analytics covering PDF/OCR errors, Document Quality ranking, Query Outcomes, Root Causes, and Machine-wise Errors."""
     return analytics_engine.get_comprehensive_analytics()
 
 

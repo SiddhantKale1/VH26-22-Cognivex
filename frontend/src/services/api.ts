@@ -494,19 +494,6 @@ export interface MachineWiseErrorStats {
         };
     }[];
 }
-
-export interface WilsonCIItem {
-    metric_name: string;
-    description: string;
-    rate: number;
-    rate_pct: number;
-    ci_lower_pct: number;
-    ci_upper_pct: number;
-    sample_size: number;
-    is_valid: boolean;
-    display: string;
-}
-
 export interface ComprehensiveAnalytics {
     summary_kpis: SummaryKPIs;
     pdf_ocr_errors: PDFOCRErrorStats;
@@ -514,11 +501,6 @@ export interface ComprehensiveAnalytics {
     query_outcomes: QueryOutcomeStats;
     error_root_causes: RootCauseStats;
     machine_wise_errors: MachineWiseErrorStats;
-    confidence_intervals: {
-        confidence_level: string;
-        method: string;
-        metrics: WilsonCIItem[];
-    };
 }
 
 export interface QueryAuditDetail {
