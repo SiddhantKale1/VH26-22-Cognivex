@@ -1,7 +1,7 @@
 """
 Query History & Telemetry Storage Module.
-Persists user queries and AI diagnostic outputs to disk and calculates
-aggregated analytics (severity distributions, failure rates, confidence scores).
+Persists user queries, retrieved chunks, and AI diagnostic outputs to disk and calculates
+aggregated analytics (severity distributions, failure rates, confidence scores, error traces).
 """
 
 import json
@@ -37,32 +37,93 @@ class QueryHistoryLogger:
         question: str,
         machine_model: str | None,
         diagnostic_response: dict,
-        latency_ms: float
+        latency_ms: float,
+        retrieved_chunks: list[dict] | None = None
     ) -> dict:
         """
-        Record a query transaction (input, output, confidence, severity, citations, latency).
+        Record a query transaction (input, output, confidence, severity, citations, retrieved chunks, latency).
         """
+        citations = diagnostic_response.get("citations", [])
+        conf_score = diagnostic_response.get("confidence", {}).get("score", 0.0)
+        status = diagnostic_response.get("status", "success")
+        meaning = diagnostic_response.get("meaning", "")
+        code = diagnostic_response.get("error_code")
+
+        # Determine Error Classification & Root Cause for Error Inspector
+        if "insufficient" in meaning.lower() or "not contain" in meaning.lower() or "unable" in meaning.lower():
+            outcome = "Unable to Answer"
+            root_cause = "Unknown / Out of Scope"
+            explanation = "Query code or symptom is outside active manufacturer documentation."
+        elif conf_score >= 0.70 and len(citations) >= 1:
+            outcome = "Successful"
+            root_cause = "None"
+            explanation = "High-confidence hybrid retrieval with verified document page citations."
+        elif (0.45 <= conf_score < 0.70) or "ambiguous" in status:
+            outcome = "Partially Correct"
+            root_cause = "Retrieval Ambiguity"
+            explanation = "Multiple machine contexts detected or partial match requiring clarification."
+        elif len(citations) == 0 and conf_score > 0.60:
+            outcome = "Hallucinated/Unsupported"
+            root_cause = "Answer Generation"
+            explanation = "Generated assertion lacks grounded citation backing."
+        else:
+            outcome = "Incorrect / Low Grounding"
+            root_cause = "Retrieval"
+            explanation = "Dense vector and BM25 similarity scores fell below threshold."
+
+        # Format retrieved chunks for audit
+        formatted_chunks = []
+        if retrieved_chunks:
+            for c in retrieved_chunks[:6]:
+                formatted_chunks.append({
+                    "chunk_id": str(c.get("chunk_id", "")),
+                    "source_file": c.get("source_file") or c.get("document_id") or "Manual",
+                    "page_number": c.get("page_number", 0),
+                    "relevance_score": round(float(c.get("similarity", 0.0)), 3),
+                    "snippet": (c.get("text") or "")[:280] + "...",
+                    "match_type": c.get("match_type", "hybrid")
+                })
+        elif citations:
+            for cit in citations:
+                formatted_chunks.append({
+                    "chunk_id": cit.get("filename", ""),
+                    "source_file": cit.get("filename") or cit.get("manual_name", ""),
+                    "page_number": cit.get("page_number", 0),
+                    "relevance_score": round(float(cit.get("relevance_score", 0.8)), 3),
+                    "snippet": cit.get("snippet", ""),
+                    "match_type": cit.get("match_type", "citation")
+                })
+
         record = {
             "query_id": f"diag_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}_{int(time.time() * 1000) % 10000:04d}",
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "question": question,
             "machine_model_filter": machine_model,
             "detected_machine": diagnostic_response.get("machine_detected") or "Industrial Equipment",
-            "error_code": diagnostic_response.get("error_code"),
+            "error_code": code,
             "severity": diagnostic_response.get("severity") or "Diagnostic Guide",
-            "confidence_score": diagnostic_response.get("confidence", {}).get("score", 0.0),
+            "confidence_score": conf_score,
             "confidence_level": diagnostic_response.get("confidence", {}).get("level", "Medium"),
-            "meaning": diagnostic_response.get("meaning", ""),
+            "meaning": meaning,
+            "possible_causes": diagnostic_response.get("possible_causes", []),
+            "recommended_actions": diagnostic_response.get("recommended_actions", []),
             "causes_count": len(diagnostic_response.get("possible_causes", [])),
             "actions_count": len(diagnostic_response.get("recommended_actions", [])),
-            "citations_count": len(diagnostic_response.get("citations", [])),
+            "citations_count": len(citations),
+            "citations": citations,
+            "retrieved_chunks": formatted_chunks,
+            "error_analysis": {
+                "outcome": outcome,
+                "root_cause": root_cause,
+                "explanation": explanation,
+                "is_grounded": len(citations) > 0,
+            },
             "response_time_ms": round(latency_ms, 1)
         }
 
         try:
             records = self.get_all_records()
             records.insert(0, record)  # Most recent first
-            # Keep up to 500 recent queries
             records = records[:500]
 
             with open(self.storage_path, "w", encoding="utf-8") as f:
@@ -83,6 +144,14 @@ class QueryHistoryLogger:
             logger.error(f"Failed to read query history: {e}")
             return []
 
+    def get_query_by_id(self, query_id: str) -> dict | None:
+        """Retrieve single query trace for Error Inspector."""
+        records = self.get_all_records()
+        for r in records:
+            if r.get("query_id") == query_id:
+                return r
+        return None
+
     def clear_history(self) -> bool:
         """Clear all stored query logs."""
         try:
@@ -95,15 +164,10 @@ class QueryHistoryLogger:
 
     def get_analytics_metrics(self) -> dict:
         """
-        Aggregate stored query logs into chart-ready metrics:
-        1. Severity Breakdown (Pie Chart data)
-        2. Machine Failure Frequency (Bar Graph data)
-        3. Confidence Levels Distribution
-        4. Top Error Codes
+        Aggregate stored query logs into chart-ready metrics.
         """
         records = self.get_all_records()
 
-        # Seed defaults if history is empty (e.g. initial demo metrics)
         if not records:
             return {
                 "total_queries": 0,
@@ -119,11 +183,7 @@ class QueryHistoryLogger:
                     {"machine": "SIMATIC S7-1200", "count": 0},
                     {"machine": "SIMATIC S7-1500", "count": 0}
                 ],
-                "confidence_breakdown": {
-                    "high": 0,
-                    "medium": 0,
-                    "insufficient": 0
-                },
+                "confidence_breakdown": {"high": 0, "medium": 0, "insufficient": 0},
                 "top_error_codes": []
             }
 
@@ -136,7 +196,6 @@ class QueryHistoryLogger:
         error_code_counts = {}
 
         for r in records:
-            # Severity
             sev = (r.get("severity") or "Diagnostic Guide").lower()
             if "fault" in sev or "critical" in sev:
                 clean_sev = "Critical Fault"
@@ -148,7 +207,6 @@ class QueryHistoryLogger:
                 clean_sev = "Diagnostic Guide"
             severity_counts[clean_sev] = severity_counts.get(clean_sev, 0) + 1
 
-            # Machine
             mach = r.get("detected_machine") or "General Equipment"
             if "G120" in mach or "sinamics" in mach.lower():
                 clean_mach = "SINAMICS G120"
@@ -160,7 +218,6 @@ class QueryHistoryLogger:
                 clean_mach = mach
             machine_counts[clean_mach] = machine_counts.get(clean_mach, 0) + 1
 
-            # Confidence
             conf = (r.get("confidence_level") or "Medium").lower()
             if conf == "high":
                 confidence_counts["high"] += 1
@@ -169,12 +226,10 @@ class QueryHistoryLogger:
             else:
                 confidence_counts["insufficient"] += 1
 
-            # Error code
             code = r.get("error_code")
             if code:
                 error_code_counts[code] = error_code_counts.get(code, 0) + 1
 
-        # Format Severity
         color_map = {
             "Critical Fault": "#ef4444",
             "Warning / Alarm": "#f59e0b",
@@ -186,10 +241,7 @@ class QueryHistoryLogger:
             for k, v in severity_counts.items()
         ]
 
-        # Format Machine
         machine_list = [{"machine": k, "count": v} for k, v in machine_counts.items()]
-
-        # Format Top Codes
         sorted_codes = sorted(error_code_counts.items(), key=lambda x: x[1], reverse=True)[:5]
         top_codes_list = [{"code": k, "count": v} for k, v in sorted_codes]
 

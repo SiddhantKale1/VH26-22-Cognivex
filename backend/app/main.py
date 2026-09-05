@@ -11,6 +11,7 @@ import time
 from app.generation.generator import RAGGenerator
 from app.storage.history import query_history_logger
 from app.storage.minio_store import minio_store
+from app.analytics.engine import analytics_engine
 
 # Load environment variables
 load_dotenv()
@@ -195,6 +196,21 @@ def clear_query_history():
     """Clear all stored query input/output logs."""
     success = query_history_logger.clear_history()
     return {"status": "success" if success else "error", "message": "Query history cleared."}
+
+
+@app.get("/api/analytics/comprehensive")
+def get_comprehensive_analytics():
+    """Retrieve full calculated analytics covering PDF/OCR errors, Document Quality ranking, Query Outcomes, Root Causes, Machine-wise Errors, and 95% Wilson Confidence Intervals."""
+    return analytics_engine.get_comprehensive_analytics()
+
+
+@app.get("/api/analytics/query/{query_id}")
+def get_query_audit_detail(query_id: str):
+    """Retrieve full diagnostic trace for Error Inspector (Query -> Retrieved Chunks -> Answer -> Root Cause)."""
+    detail = query_history_logger.get_query_by_id(query_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail=f"Query '{query_id}' not found in audit logs.")
+    return detail
 
 
 @app.post("/api/errors")

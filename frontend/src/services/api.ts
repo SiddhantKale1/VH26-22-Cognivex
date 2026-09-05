@@ -391,6 +391,189 @@ export const getManualPresignedUrl = async (docId: string): Promise<string> => {
     }
 };
 
+// ============================================================
+// COMPREHENSIVE ANALYTICS & ERROR ANALYSIS INTERFACES
+// ============================================================
+
+export interface SummaryKPIs {
+    total_documents: number;
+    ocr_success_rate_pct: number;
+    avg_document_quality: number;
+    total_queries: number;
+    answer_success_rate_pct: number;
+    overall_error_rate_pct: number;
+}
+
+export interface PDFOCRErrorStats {
+    total_documents: number;
+    total_pages_scanned: number;
+    successful_documents: number;
+    ocr_failures: number;
+    low_confidence_ocr: number;
+    incomplete_garbled_extraction: number;
+    corrupted_pdfs: number;
+    failed_pages_count: number;
+    ocr_error_rate_pct: number;
+    chart_data: { category: string; count: number; color: string }[];
+    document_breakdown: {
+        filename: string;
+        total_pages: number;
+        empty_pages: number;
+        low_conf_pages: number;
+        garbled_pages: number;
+        status: string;
+    }[];
+}
+
+export interface DocumentQualityItem {
+    filename: string;
+    document_id: string;
+    quality_score: number;
+    total_pages: number;
+    text_pages: number;
+    chunk_count: number;
+    completeness_pct: number;
+    cleanliness_pct: number;
+    tier: string;
+    tier_color: string;
+}
+
+export interface DocumentQualityRanking {
+    average_quality_score: number;
+    ranked_documents: DocumentQualityItem[];
+    top_quality: DocumentQualityItem[];
+    bottom_quality: DocumentQualityItem[];
+}
+
+export interface QueryOutcomeStats {
+    total_queries: number;
+    successful_count: number;
+    partially_correct_count: number;
+    incorrect_count: number;
+    hallucinated_count: number;
+    unable_to_answer_count: number;
+    success_rate_pct: number;
+    failure_rate_pct: number;
+    chart_data: { outcome: string; count: number; color: string }[];
+    classified_queries: {
+        query_id: string;
+        timestamp: string;
+        question: string;
+        detected_machine?: string;
+        error_code?: string;
+        confidence_score: number;
+        outcome: string;
+        citations_count: number;
+        response_time_ms: number;
+    }[];
+}
+
+export interface RootCauseStats {
+    total_failures_analyzed: number;
+    root_causes: {
+        ocr: number;
+        retrieval: number;
+        chunking: number;
+        answer_generation: number;
+        unknown: number;
+    };
+    chart_data: { cause: string; count: number; color: string; description: string }[];
+}
+
+export interface MachineWiseErrorStats {
+    machine_statistics: {
+        machine: string;
+        total: number;
+        successful: number;
+        failed: number;
+        error_rate_pct: number;
+        error_types: {
+            retrieval: number;
+            generation: number;
+            refusal: number;
+        };
+    }[];
+}
+
+export interface WilsonCIItem {
+    metric_name: string;
+    description: string;
+    rate: number;
+    rate_pct: number;
+    ci_lower_pct: number;
+    ci_upper_pct: number;
+    sample_size: number;
+    is_valid: boolean;
+    display: string;
+}
+
+export interface ComprehensiveAnalytics {
+    summary_kpis: SummaryKPIs;
+    pdf_ocr_errors: PDFOCRErrorStats;
+    document_quality: DocumentQualityRanking;
+    query_outcomes: QueryOutcomeStats;
+    error_root_causes: RootCauseStats;
+    machine_wise_errors: MachineWiseErrorStats;
+    confidence_intervals: {
+        confidence_level: string;
+        method: string;
+        metrics: WilsonCIItem[];
+    };
+}
+
+export interface QueryAuditDetail {
+    query_id: string;
+    timestamp: string;
+    question: string;
+    machine_model_filter?: string | null;
+    detected_machine: string;
+    error_code?: string;
+    severity: string;
+    confidence_score: number;
+    confidence_level: string;
+    meaning: string;
+    possible_causes: string[];
+    recommended_actions: string[];
+    citations: Citation[];
+    retrieved_chunks: {
+        chunk_id: string;
+        source_file: string;
+        page_number: number;
+        relevance_score: number;
+        snippet: string;
+        match_type: string;
+    }[];
+    error_analysis: {
+        outcome: string;
+        root_cause: string;
+        explanation: string;
+        is_grounded: boolean;
+    };
+    response_time_ms: number;
+}
+
+// Fetch comprehensive calculated analytics
+export const getComprehensiveAnalytics = async (): Promise<ComprehensiveAnalytics> => {
+    try {
+        const response = await api.get("/api/analytics/comprehensive");
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching comprehensive analytics:", error);
+        throw error;
+    }
+};
+
+// Fetch single query diagnostic trace for Error Inspector
+export const getQueryAuditDetail = async (queryId: string): Promise<QueryAuditDetail> => {
+    try {
+        const response = await api.get(`/api/analytics/query/${encodeURIComponent(queryId)}`);
+        return response.data;
+    } catch (error) {
+        console.error(`Error fetching audit detail for query ${queryId}:`, error);
+        throw error;
+    }
+};
+
 export interface SystemStats {
     total_documents: number;
     total_chunks: number;
@@ -409,23 +592,24 @@ export const getStats = async (): Promise<SystemStats> => {
     } catch (error) {
         console.error("Error fetching stats:", error);
         return {
-            total_documents: 5,
+            total_documents: 7,
             total_chunks: 6729,
             embedding_model: "paraphrase-multilingual-MiniLM-L12-v2",
             vector_dimensions: 384,
             manual_distribution: [
-                { manual: "G120_CU240BE2_op_instr.pdf", chunks: 2140 },
-                { manual: "G120_Safety_fct_man.pdf", chunks: 1480 },
-                { manual: "s71200_system_manual.pdf", chunks: 1820 },
-                { manual: "s71500_cpu1512c_1_pn.pdf", chunks: 1289 },
+                { manual: "s71200_system_manual.pdf", chunks: 2494 },
+                { manual: "s71200_system_manual_en-US_en-US.pdf", chunks: 2653 },
+                { manual: "G120_CU240BE2_op_instr_0117_en-US.pdf", chunks: 793 },
+                { manual: "G120_Safety_fct_man_0920_en-US.pdf", chunks: 478 },
+                { manual: "s71500_cpu1512c_1_pn_manual_en-US_en-US.pdf", chunks: 311 },
             ],
             machine_distribution: [
-                { machine: "SINAMICS G120", chunks: 3620 },
-                { machine: "SIMATIC S7-1200", chunks: 1820 },
-                { machine: "SIMATIC S7-1500", chunks: 1289 },
+                { machine: "SIMATIC S7-1200", chunks: 5147 },
+                { machine: "SINAMICS G120", chunks: 1271 },
+                { machine: "SIMATIC S7-1500", chunks: 311 },
             ],
             system_status: "Operational",
-            llm_model: "Groq LLaMA-3.3-70B",
+            llm_model: "Groq Qwen 2.5 / LLaMA 3.3",
         };
     }
 };

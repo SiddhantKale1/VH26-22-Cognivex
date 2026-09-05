@@ -1,1 +1,66 @@
-[]
+[
+  {
+    "query_id": "diag_20260905_062021_1480",
+    "timestamp": "2026-09-05T06:20:21.480664Z",
+    "question": "What does F01650 mean and which manual is that from?",
+    "machine_model_filter": null,
+    "detected_machine": "Siemens Industrial Equipment",
+    "error_code": "F01650",
+    "severity": "Fault",
+    "confidence_score": 0.98,
+    "confidence_level": "High",
+    "meaning": "F01650 indicates that an acceptance test for the safety functions is required. This fault is documented in the SINAMICS G120 Safety Integrated Function Manual (G120_Safety_fct_man_0920_en-US.pdf) and the SINAMICS G120 CU240BE2 Operating Instructions (G120_CU240BE2_op_instr_0117_en-US.pdf).",
+    "causes_count": 2,
+    "actions_count": 3,
+    "citations_count": 5,
+    "response_time_ms": 1224.7
+  },
+  {
+    "query_id": "diag_20260905_062004_4028",
+    "timestamp": "2026-09-05T06:20:04.028831Z",
+    "question": "My CPU's ERROR LED is flashing red but RUN/STOP is off \u2014 what's going on?",
+    "machine_model_filter": "siemens-s7-1200",
+    "detected_machine": "SIMATIC S7-1200 PLC",
+    "error_code": "LED",
+    "severity": "Insufficient Data",
+    "confidence_score": 0.78,
+    "confidence_level": "High",
+    "meaning": "The manual does not contain a specific entry for the combination of a flashing red ERROR LED and an OFF RUN/STOP LED. The provided excerpts define the flashing red ERROR LED as indicating an error (such as internal CPU error, memory card error, or configuration error) or a non-ongoing error (flashing for three seconds), and the OFF RUN/STOP LED as indicating that power is off. However, the manual states that if power is off, all LEDs (including ERROR) should be off. Therefore, the specific scenario described is not explicitly documented in the provided excerpts.",
+    "causes_count": 0,
+    "actions_count": 0,
+    "citations_count": 6,
+    "response_time_ms": 1012.5
+  },
+  {
+    "query_id": "diag_20260905_061958_8112",
+    "timestamp": "2026-09-05T06:19:58.112537Z",
+    "question": "My CPU's ERROR LED is flashing red but RUN/STOP is off \u2014 what's going on?",
+    "machine_model_filter": null,
+    "detected_machine": "Multiple Systems Detected",
+    "error_code": "LED",
+    "severity": "Disambiguation Required",
+    "confidence_score": 0.5,
+    "confidence_level": "Ambiguous",
+    "meaning": "Ambiguous Identifier: 'LED' appears in multiple machine manuals.",
+    "causes_count": 1,
+    "actions_count": 1,
+    "citations_count": 0,
+    "response_time_ms": 112.3
+  },
+  {
+    "query_id": "diag_20260905_061942_2003",
+    "timestamp": "2026-09-05T06:19:42.003347Z",
+    "question": "What does F09999 mean?",
+    "machine_model_filter": null,
+    "detected_machine": "Siemens Industrial Equipment",
+    "error_code": "F09999",
+    "severity": "Insufficient Data",
+    "confidence_score": 0.35,
+    "confidence_level": "Insufficient",
+    "meaning": "I'm sorry, but I don't have enough information to answer that question.",
+    "causes_count": 0,
+    "actions_count": 0,
+    "citations_count": 0,
+    "response_time_ms": 1849.9
+  }
+]
