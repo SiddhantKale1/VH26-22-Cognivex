@@ -204,9 +204,17 @@ export const QuerySection: React.FC = () => {
 
   const getSeverityBadge = (severity: string) => {
     const s = (severity || "").toLowerCase();
+    if (s.includes("insufficient") || s.includes("not found") || s.includes("refusal")) {
+      return (
+        <span className="px-3 py-1 text-xs font-bold rounded-full bg-amber-50 border border-amber-300 text-amber-900 flex items-center gap-1 shadow-xs">
+          <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+          {severity || "Insufficient Data"}
+        </span>
+      );
+    }
     if (s.includes("fault") || s.includes("critical") || s.includes("danger") || s.includes("エラー") || s.includes("fehler") || s.includes("दोष") || s.includes("खराबी") || s.includes("फॉल्ट")) {
       return (
-        <span className="px-3 py-1 text-xs font-bold rounded-full bg-red-50 border border-red-200 text-red-700 flex items-center gap-1 shadow-sm">
+        <span className="px-3 py-1 text-xs font-bold rounded-full bg-red-50 border border-red-200 text-red-700 flex items-center gap-1 shadow-xs">
           <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
           {severity || "Critical Fault"}
         </span>
@@ -214,14 +222,14 @@ export const QuerySection: React.FC = () => {
     }
     if (s.includes("alarm") || s.includes("warn") || s.includes("警告") || s.includes("warnung") || s.includes("चेतावनी")) {
       return (
-        <span className="px-3 py-1 text-xs font-bold rounded-full bg-amber-50 border border-amber-300 text-amber-800 flex items-center gap-1 shadow-sm">
+        <span className="px-3 py-1 text-xs font-bold rounded-full bg-amber-50 border border-amber-300 text-amber-800 flex items-center gap-1 shadow-xs">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
           {severity || "Warning / Alarm"}
         </span>
       );
     }
     return (
-      <span className="px-3 py-1 text-xs font-bold rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 flex items-center gap-1 shadow-sm">
+      <span className="px-3 py-1 text-xs font-bold rounded-full bg-emerald-50 border border-emerald-300 text-emerald-800 flex items-center gap-1 shadow-xs">
         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
         {severity || "Diagnostic Guide"}
       </span>
@@ -230,6 +238,10 @@ export const QuerySection: React.FC = () => {
 
   const langInfo = result?.language_info;
   const isMultilingualDoc = langInfo && langInfo.document_language !== "en" && langInfo.document_language !== "";
+  const isInsufficient =
+    result?.status === "insufficient_data" ||
+    result?.confidence?.level === "Insufficient" ||
+    (result?.severity || "").toLowerCase().includes("insufficient");
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -426,7 +438,7 @@ export const QuerySection: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-lg font-bold text-slate-900">Diagnostic Synthesis</h3>
-                {result.machine_detected && (
+                {result.machine_detected && !isInsufficient && (
                   <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 border border-amber-300 text-amber-900">
                     {result.machine_detected}
                   </span>
@@ -447,7 +459,7 @@ export const QuerySection: React.FC = () => {
 
             <div className="flex items-center gap-2.5">
               {getSeverityBadge(result.severity)}
-              {result.confidence && (
+              {result.confidence && !isInsufficient && (
                 <span className="px-3 py-1 text-xs font-bold rounded-full bg-slate-100 border border-slate-300 text-slate-700">
                   Confidence: {result.confidence.level} ({(result.confidence.score * 100).toFixed(0)}%)
                 </span>
