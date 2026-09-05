@@ -223,6 +223,7 @@ export const uploadDocument = async (file: File): Promise<{ status: string; mess
         headers: {
             "Content-Type": "multipart/form-data",
         },
+        timeout: 600000, // 10 minutes timeout for multi-hundred page industrial manuals
     });
     return response.data;
 };

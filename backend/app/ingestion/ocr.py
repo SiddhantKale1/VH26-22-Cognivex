@@ -96,34 +96,47 @@ def ocr_page_image(image_obj) -> str:
     return text
 
 
-def ocr_pdf(pdf_path: str, zoom: float = 2.0) -> list[dict]:
+def ocr_pdf(pdf_path: str, zoom: float = 1.5) -> list[dict]:
     """
-    Execute end-to-end OCR on all pages of a PDF document:
-    1. Rasterize each page at high resolution (`zoom` x `zoom`).
-    2. Enhance contrast and straighten orientation.
-    3. Extract text and preserve 1-indexed page numbers.
+    Execute optimized selective OCR on a PDF document:
+    1. Extracts native embedded text first.
+    2. Only rasterizes and runs image OCR on pages with insufficient text (< 40 characters).
+    3. Preserves 1-indexed page numbers.
     """
-    logger.info(f"Starting OCR extraction on: {pdf_path}")
+    logger.info(f"Starting optimized hybrid extraction on: {pdf_path}")
     doc = pymupdf.open(pdf_path)
     pages = []
 
     for page_number, page in enumerate(doc, start=1):
-        pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
+        native_text = page.get_text("text").strip()
         
-        extracted_text = ""
-        if PIL_AVAILABLE:
-            image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            extracted_text = ocr_page_image(image)
+        # If page already has rich embedded text, use it directly (instant)
+        if len(native_text) >= 40:
+            pages.append({
+                "page_number": page_number,
+                "text": native_text
+            })
+            continue
 
-        # Fallback to PyMuPDF's built-in text / OCR page if available
-        if not extracted_text:
-            extracted_text = page.get_text().strip()
+        # Page is scanned or contains an image/schematic -> run preprocessed OCR
+        try:
+            pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom))
+            extracted_text = ""
+            if PIL_AVAILABLE:
+                image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                extracted_text = ocr_page_image(image)
 
-        pages.append({
-            "page_number": page_number,
-            "text": extracted_text or "[Image Page / Circuit Schematic with no legible text]"
-        })
+            pages.append({
+                "page_number": page_number,
+                "text": extracted_text or native_text or "[Technical Diagram / Schematic]"
+            })
+        except Exception as e:
+            logger.warning(f"Page {page_number} OCR fallback notice: {e}")
+            pages.append({
+                "page_number": page_number,
+                "text": native_text or ""
+            })
 
     doc.close()
-    logger.info(f"Completed OCR on {len(pages)} pages.")
+    logger.info(f"Completed hybrid extraction on {len(pages)} pages.")
     return pages
