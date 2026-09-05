@@ -32,16 +32,19 @@ except ImportError:
     _easyocr_reader = None
 
 
-def get_easyocr_reader():
-    """Lazily initialize EasyOCR reader."""
+def get_easyocr_reader(languages: list[str] = ['en', 'ja']):
+    """Lazily initialize EasyOCR reader with multilingual capabilities."""
     global _easyocr_reader
     if _easyocr_reader is None and EASYOCR_AVAILABLE:
         try:
-            logger.info("Initializing EasyOCR reader (English)...")
-            _easyocr_reader = easyocr.Reader(['en'], gpu=False)
+            logger.info(f"Initializing EasyOCR reader with languages: {languages}...")
+            _easyocr_reader = easyocr.Reader(languages, gpu=False)
         except Exception as e:
-            logger.warning(f"Failed to initialize EasyOCR: {e}")
-            _easyocr_reader = None
+            logger.warning(f"Failed to initialize EasyOCR with {languages}, falling back to ['en']: {e}")
+            try:
+                _easyocr_reader = easyocr.Reader(['en'], gpu=False)
+            except Exception:
+                _easyocr_reader = None
     return _easyocr_reader
 
 

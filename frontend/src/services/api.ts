@@ -29,6 +29,22 @@ export interface ConfidenceInfo {
     explanation: string;
 }
 
+export interface SuggestedLanguage {
+    code: string;
+    name: string;
+    is_default: boolean;
+}
+
+export interface LanguageInfo {
+    query_language: string;
+    query_language_name: string;
+    document_language: string;
+    document_language_name: string;
+    target_language: string;
+    target_language_name: string;
+    suggested_languages: SuggestedLanguage[];
+}
+
 export interface DiagnosticResponse {
     status: "success" | "ambiguous" | "insufficient_data";
     error_code?: string | null;
@@ -42,6 +58,7 @@ export interface DiagnosticResponse {
     confidence: ConfidenceInfo;
     clarifying_question?: string;
     clarification_options?: ClarificationOption[];
+    language_info?: LanguageInfo;
 }
 
 export interface DemoScenario {
@@ -69,13 +86,15 @@ export interface DocumentInfo {
 export const askQuestion = async (
     question: string,
     machineModel?: string | null,
-    history: { role: string; content: string }[] = []
+    history: { role: string; content: string }[] = [],
+    targetLanguage: string = "en"
 ): Promise<DiagnosticResponse> => {
     try {
         const response = await api.post("/api/query", {
             question,
             machine_model: machineModel || null,
-            history
+            history,
+            target_language: targetLanguage || "en"
         });
         return response.data;
     } catch (error: any) {
@@ -90,19 +109,21 @@ export const askQuestion = async (
 // Analyze specific machine error code
 export const analyzeError = async (
     machineId: string,
-    errorCode: string
+    errorCode: string,
+    targetLanguage: string = "en"
 ): Promise<DiagnosticResponse> => {
     try {
         const response = await api.post("/api/errors", {
             machine_model: machineId,
             error_code: errorCode,
+            target_language: targetLanguage || "en"
         });
         return response.data;
     } catch (error: any) {
-        console.error("Error analyzing machine error:", error);
+        console.error("Error analyzing error:", error);
         const detail = error.response?.data?.detail || error.message;
         throw new Error(
-            detail || "Failed to reach backend server. Please verify backend is running on port 8000."
+            detail || "Failed to analyze error. Please check your backend connection."
         );
     }
 };

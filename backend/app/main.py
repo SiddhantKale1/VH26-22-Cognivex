@@ -75,11 +75,13 @@ class QueryRequest(BaseModel):
     machine_model: str | None = None
     history: list[dict] = []
     session_id: str | None = None
+    target_language: str | None = "en"
 
 
 class ErrorRequest(BaseModel):
     machine_model: str | None = None
     error_code: str
+    target_language: str | None = "en"
 
 
 # ============================================================
@@ -160,7 +162,8 @@ def handle_query(req: QueryRequest):
     response = gen.generate_answer(
         question=req.question,
         machine_model=req.machine_model,
-        history=req.history
+        history=req.history,
+        target_language=req.target_language
     )
     latency_ms = (time.time() - start_time) * 1000
 
@@ -220,7 +223,8 @@ def handle_error_analysis(req: ErrorRequest):
     gen = get_generator()
     return gen.generate_error_analysis(
         machine_model=req.machine_model or "",
-        error_code=req.error_code
+        error_code=req.error_code,
+        target_language=req.target_language
     )
 
 

@@ -13,40 +13,49 @@ from app.retrieval.search import (
     detect_machine_from_text,
     MACHINE_DISPLAY_NAMES,
 )
+from app.ingestion.lang_utils import (
+    detect_script_or_language,
+    get_language_display_name,
+    get_suggested_languages,
+    LANGUAGE_NAMES,
+)
 
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT_DIAGNOSTIC = """
-You are an expert industrial automation diagnostic assistant for Siemens factory equipment (S7-1200 PLC, S7-1500 PLC, SINAMICS G120 Drives).
+You are an expert industrial automation diagnostic assistant for factory machinery (PLCs, inverters, frequency drives, automation controllers).
 Analyze the provided technical manual excerpts to assist a factory floor technician.
 
 MANDATORY RULES:
-1. SAME LANGUAGE RESPONSE: You MUST detect the language of the User / Technician Question and return ALL fields in the JSON response (`meaning`, `severity`, `possible_causes`, `recommended_actions`) in the EXACT SAME LANGUAGE as the user's question (e.g. German query -> German response, Spanish query -> Spanish response, French query -> French response, English query -> English response, etc.).
-2. ORIGINAL MANUAL CONTENT UNCHANGED: Rely strictly on the provided technical manual excerpts regardless of the language they are written in. Treat the manual excerpt facts as authoritative ground truth.
-3. STRICT GROUNDING & NO HALLUCINATION: Base all explanations, causes, and action steps STRICTLY and ONLY on the provided manual excerpts. Do NOT invent, assume, extrapolate, or add outside technical information, unverified parameters, or non-manual repair procedures.
-4. INSUFFICIENT DATA REFUSAL: If the provided manual excerpts do not contain sufficient information to answer the user's question, set "meaning" to state clearly in the user's question language that the manual does not contain sufficient information for this query, and leave "possible_causes" and "recommended_actions" as empty arrays.
-5. OPERATOR SAFETY: If dealing with high voltage, rotating machinery, or safety functions, include safety precautions (e.g. lockout-tagout, checking motor isolation) in the user's question language.
+1. OUTPUT LANGUAGE: You MUST generate ALL fields in the JSON response (`meaning`, `severity`, `possible_causes`, `recommended_actions`) in the requested TARGET LANGUAGE: {target_language_name} ({target_language_code}).
+2. MULTILINGUAL SYNTHESIS:
+   - Faithfully translate technical manual excerpts from the source manual language into {target_language_name}.
+   - Keep manufacturer error codes (e.g. "F07900", "0x0041", "OB82"), parameter names (e.g. "p1082"), and hardware models unchanged.
+3. STRICT GROUNDING & NO HALLUCINATION: Base all explanations, causes, and action steps STRICTLY and ONLY on the provided manual excerpts. Do NOT invent, assume, extrapolate, or add outside technical information.
+4. INSUFFICIENT DATA REFUSAL: If the provided manual excerpts do not contain sufficient information to answer the user's question, set "meaning" to state clearly in {target_language_name} that the manual does not contain sufficient information for this query, and leave "possible_causes" and "recommended_actions" as empty arrays.
+5. OPERATOR SAFETY: If dealing with high voltage, rotating machinery, or safety functions, include safety precautions in {target_language_name}.
 6. OUTPUT JSON FORMAT: Return a valid JSON object matching this exact structure:
-{
-  "detected_language": "Name of user's query language (e.g. German, Spanish, French, English)",
-  "meaning": "Short, clear explanation in the exact same language as the user's question",
-  "severity": "Fault / Alarm / Informational status in the exact same language as the user's question",
+{{
+  "detected_manual_language": "<Language of source manual excerpts>",
+  "response_language": "{target_language_name}",
+  "meaning": "<Short, clear explanation in {target_language_name}>",
+  "severity": "<Fault / Alarm / Informational in {target_language_name}>",
   "possible_causes": [
-    "Cause 1 with specific component or condition in user's question language",
-    "Cause 2 with parameter reference if applicable in user's question language"
+    "<Cause 1 in {target_language_name}>",
+    "<Cause 2 in {target_language_name}>"
   ],
   "recommended_actions": [
-    "Step 1: Immediate physical check or measurement in user's question language",
-    "Step 2: Parameter verification or reset procedure in user's question language",
-    "Step 3: Verification test in user's question language"
+    "<Step 1: Check in {target_language_name}>",
+    "<Step 2: Remedy in {target_language_name}>",
+    "<Step 3: Verification in {target_language_name}>"
   ]
-}
+}}
 Return ONLY valid JSON. No markdown fences.
 """.strip()
 
 
 class RAGGenerator:
-    """Combines Multilingual Hybrid Vector/BM25 retrieval with Groq LLM synthesis and hallucination guardrails."""
+    """Combines Multilingual Hybrid Vector/BM25 retrieval with Groq LLM synthesis, cross-lingual translation, and hallucination guardrails."""
 
     def __init__(self, search_engine: ManualSearch | None = None, llm_client: LLMClient | None = None):
         self.search = search_engine or ManualSearch()
@@ -97,35 +106,51 @@ class RAGGenerator:
                 })
         return citations
 
-    def _get_refusal_in_query_language(self, question: str) -> str:
-        """Synthesize refusal message in the exact language of the user's question."""
+    def _get_refusal_in_target_language(self, question: str, target_lang_name: str, target_lang_code: str) -> str:
+        """Synthesize refusal message in the requested target language."""
         if not self.llm.is_configured():
-            return "Insufficient data in manual."
+            return f"Insufficient data in manual to answer query in {target_lang_name}."
         
         prompt = (
-            f"The user asked: '{question}'. The manual does not contain sufficient data to answer this query. "
-            "Return a JSON object with key 'meaning' containing a 1-sentence refusal statement in the EXACT SAME LANGUAGE as the user's question."
+            f"The user asked: '{question}'. The technical manual does not contain sufficient data to answer this query. "
+            f"Return a JSON object with key 'meaning' containing a 1-sentence refusal statement in {target_lang_name} ({target_lang_code})."
         )
-        sys_inst = "Return ONLY a valid JSON object: {\"meaning\": \"<refusal message in user's question language>\"}"
+        sys_inst = f"Return ONLY a valid JSON object: {{\"meaning\": \"<refusal message in {target_lang_name}>\"}}"
         try:
             res = self.llm.generate_json(prompt=prompt, system_instruction=sys_inst)
-            return res.get("meaning") or "Insufficient data in manual."
+            return res.get("meaning") or f"Insufficient data in manual."
         except Exception:
-            return "Insufficient data in manual."
+            return f"Insufficient data in manual."
 
     def generate_answer(
         self,
         question: str,
         machine_model: str | None = None,
         history: list[dict] | None = None,
-        top_k: int = 6
+        top_k: int = 6,
+        target_language: str | None = "en"
     ) -> dict:
         """
         Answer a troubleshooting query with full multi-turn context,
-        multilingual embedding alignment, ambiguity resolution, and hallucination guardrails.
+        multilingual cross-lingual synthesis, ambiguity resolution, and hallucination guardrails.
         """
-        logger.info("Processing query: '%s' (model: %s)", question, machine_model)
+        logger.info("Processing query: '%s' (model: %s, target_lang: %s)", question, machine_model, target_language)
         clean_q = question.strip()
+
+        # Detect query language
+        query_lang = detect_script_or_language(clean_q)
+
+        # Resolve effective target language
+        resolved_target_code = "en"
+        if target_language:
+            if target_language.lower() == "auto":
+                resolved_target_code = query_lang
+            elif target_language.lower() in LANGUAGE_NAMES:
+                resolved_target_code = target_language.lower()
+        else:
+            resolved_target_code = "en"
+
+        target_lang_name = get_language_display_name(resolved_target_code)
 
         # 1. Multi-turn context resolution
         prior_machine, prior_code = self._extract_context_from_history(history)
@@ -148,16 +173,23 @@ class RAGGenerator:
         )
         error_code = search_res.get("error_code") or prior_code
 
+        # Detect source document language from retrieved chunks
+        chunks = search_res.get("results", [])
+        combined_chunk_text = " ".join(c.get("text", "") for c in chunks[:3])
+        doc_lang = detect_script_or_language(combined_chunk_text) if combined_chunk_text else "en"
+        doc_lang_name = get_language_display_name(doc_lang)
+
+        suggested_langs = get_suggested_languages(doc_lang=doc_lang, query_lang=query_lang)
+
         # ============================================================
         # 3. HALLUCINATION CONTROL / GRACEFUL REFUSAL GATEWAY
         # ============================================================
         confidence = search_res.get("confidence", {})
-        chunks = search_res.get("results", [])
 
         if confidence.get("level") == "Insufficient" or confidence.get("score", 0.0) < 0.50 or not chunks:
             logger.warning("Graceful refusal triggered for query: %s", clean_q)
             target_name = detected_machine or "Siemens Industrial Equipment"
-            refusal_msg = self._get_refusal_in_query_language(clean_q)
+            refusal_msg = self._get_refusal_in_target_language(clean_q, target_lang_name, resolved_target_code)
             return {
                 "status": "insufficient_data",
                 "error_code": error_code,
@@ -172,6 +204,15 @@ class RAGGenerator:
                     "level": "Insufficient",
                     "score": confidence.get("score", 0.0),
                     "explanation": confidence.get("explanation", "Insufficient data in manual (confidence below 50%).")
+                },
+                "language_info": {
+                    "query_language": query_lang,
+                    "query_language_name": get_language_display_name(query_lang),
+                    "document_language": doc_lang,
+                    "document_language_name": doc_lang_name,
+                    "target_language": resolved_target_code,
+                    "target_language_name": target_lang_name,
+                    "suggested_languages": suggested_langs
                 }
             }
 
@@ -201,6 +242,15 @@ class RAGGenerator:
                     "level": "Ambiguous",
                     "score": 0.50,
                     "explanation": "Multiple machine manuals match this code. User clarification required."
+                },
+                "language_info": {
+                    "query_language": query_lang,
+                    "query_language_name": get_language_display_name(query_lang),
+                    "document_language": doc_lang,
+                    "document_language_name": doc_lang_name,
+                    "target_language": resolved_target_code,
+                    "target_language_name": target_lang_name,
+                    "suggested_languages": suggested_langs
                 }
             }
 
@@ -219,6 +269,11 @@ class RAGGenerator:
             )
         context_str = "\n\n".join(context_blocks)
 
+        formatted_sys_prompt = SYSTEM_PROMPT_DIAGNOSTIC.format(
+            target_language_name=target_lang_name,
+            target_language_code=resolved_target_code
+        )
+
         prompt = f"""
 Manual Excerpts (Ground Truth Documentation):
 =============================================
@@ -227,18 +282,20 @@ Manual Excerpts (Ground Truth Documentation):
 Machine Context: {detected_machine or 'Siemens Automation Equipment'}
 User / Technician Question: {clean_q}
 Active Error / Fault Code: {error_code or 'Not specified'}
+Source Manual Language: {doc_lang_name} ({doc_lang})
+Requested Target Language: {target_lang_name} ({resolved_target_code})
 
-CRITICAL MULTILINGUAL & GROUNDING INSTRUCTIONS:
-1. Detect the language of the User / Technician Question: "{clean_q}".
-2. You MUST generate ALL fields in the JSON response (`meaning`, `severity`, `possible_causes`, `recommended_actions`) in the EXACT SAME LANGUAGE as the user's question.
-3. Base all explanations, causes, and action steps STRICTLY and ONLY on the provided manual excerpts above. Do NOT invent, assume, or add unverified information or outside fixes.
+CRITICAL MULTILINGUAL INSTRUCTIONS:
+1. Synthesize all diagnostic facts into {target_lang_name} ({resolved_target_code}).
+2. Keep hardware fault codes (e.g. "{error_code or ''}"), parameter names, and technical IDs intact.
+3. Base all explanations, causes, and action steps STRICTLY and ONLY on the provided manual excerpts above. Do NOT invent or assume outside fixes.
 
-Analyze the excerpts and return the diagnostic JSON:
+Analyze the excerpts and return the diagnostic JSON in {target_lang_name}:
 """.strip()
 
         parsed_json = self.llm.generate_json(
             prompt=prompt,
-            system_instruction=SYSTEM_PROMPT_DIAGNOSTIC
+            system_instruction=formatted_sys_prompt
         )
 
         meaning = parsed_json.get("meaning") or f"Diagnostic procedure for {error_code or 'reported issue'}."
@@ -248,7 +305,7 @@ Analyze the excerpts and return the diagnostic JSON:
 
         meaning_lower = meaning.lower()
         if any(phrase in meaning_lower for phrase in ["not defined", "not found in the provided", "is not found", "does not exist", "not a standard", "insufficient data"]):
-            refusal_msg = self._get_refusal_in_query_language(clean_q)
+            refusal_msg = self._get_refusal_in_target_language(clean_q, target_lang_name, resolved_target_code)
             return {
                 "status": "insufficient_data",
                 "error_code": error_code,
@@ -263,12 +320,20 @@ Analyze the excerpts and return the diagnostic JSON:
                     "level": "Insufficient",
                     "score": 0.0,
                     "explanation": "Insufficient data in manual."
+                },
+                "language_info": {
+                    "query_language": query_lang,
+                    "query_language_name": get_language_display_name(query_lang),
+                    "document_language": doc_lang,
+                    "document_language_name": doc_lang_name,
+                    "target_language": resolved_target_code,
+                    "target_language_name": target_lang_name,
+                    "suggested_languages": suggested_langs
                 }
             }
 
         return {
             "status": "success",
-            "detected_language": parsed_json.get("detected_language", "Auto-detected"),
             "error_code": error_code,
             "machine_model": effective_machine,
             "machine_detected": detected_machine or "Siemens Industrial Equipment",
@@ -277,15 +342,25 @@ Analyze the excerpts and return the diagnostic JSON:
             "possible_causes": causes,
             "recommended_actions": actions,
             "citations": citations,
-            "confidence": confidence
+            "confidence": confidence,
+            "language_info": {
+                "query_language": query_lang,
+                "query_language_name": get_language_display_name(query_lang),
+                "document_language": doc_lang,
+                "document_language_name": doc_lang_name,
+                "target_language": resolved_target_code,
+                "target_language_name": target_lang_name,
+                "suggested_languages": suggested_langs
+            }
         }
 
-    def generate_error_analysis(self, machine_model: str, error_code: str, top_k: int = 6) -> dict:
+    def generate_error_analysis(self, machine_model: str, error_code: str, top_k: int = 6, target_language: str | None = "en") -> dict:
         """Diagnose a specific error code using the unified diagnostic pipeline."""
         clean_code = error_code.strip()
         query = f"Error {clean_code} fault cause remedy"
         return self.generate_answer(
             question=query,
             machine_model=machine_model,
-            top_k=top_k
+            top_k=top_k,
+            target_language=target_language
         )

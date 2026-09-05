@@ -8,7 +8,9 @@ import {
   Loader2,
   Sparkles,
   HelpCircle,
-  Send
+  Send,
+  Globe2,
+  Languages
 } from "lucide-react";
 import { askQuestion, type DiagnosticResponse } from "../services/api";
 
@@ -17,6 +19,16 @@ const MACHINE_OPTIONS = [
   { id: "sinamics-drive", label: "SINAMICS G120 Drive" },
   { id: "s7-1200", label: "SIMATIC S7-1200 PLC" },
   { id: "s7-1500", label: "SIMATIC S7-1500 PLC" },
+];
+
+const LANGUAGE_OPTIONS = [
+  { id: "en", label: "English (Default)" },
+  { id: "ja", label: "日本語 (Japanese)" },
+  { id: "de", label: "Deutsch (German)" },
+  { id: "es", label: "Español (Spanish)" },
+  { id: "fr", label: "Français (French)" },
+  { id: "zh", label: "中文 (Chinese)" },
+  { id: "auto", label: "Auto-Detect Query Language" },
 ];
 
 const PRESET_QUERIES = [
@@ -45,23 +57,25 @@ const PRESET_QUERIES = [
 export const QuerySection: React.FC = () => {
   const [query, setQuery] = useState("");
   const [selectedMachine, setSelectedMachine] = useState("");
+  const [selectedLanguage, setSelectedLanguage] = useState("en");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<DiagnosticResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [openSnippet, setOpenSnippet] = useState<number | null>(null);
 
-  const handleSearch = async (textToSearch?: string, machineOverride?: string) => {
+  const handleSearch = async (textToSearch?: string, machineOverride?: string, langOverride?: string) => {
     const q = (textToSearch !== undefined ? textToSearch : query).trim();
     if (!q) return;
 
     const m = machineOverride !== undefined ? machineOverride : selectedMachine;
+    const l = langOverride !== undefined ? langOverride : selectedLanguage;
 
     setLoading(true);
     setError(null);
     setOpenSnippet(null);
 
     try {
-      const response = await askQuestion(q, m || null);
+      const response = await askQuestion(q, m || null, [], l);
       setResult(response);
     } catch (err: any) {
       setError(err.message || "Failed to process query.");
@@ -76,9 +90,14 @@ export const QuerySection: React.FC = () => {
     handleSearch(preset.query, preset.model);
   };
 
+  const handleLanguageSwitch = (newLang: string) => {
+    setSelectedLanguage(newLang);
+    handleSearch(query, selectedMachine, newLang);
+  };
+
   const getSeverityBadge = (severity: string) => {
     const s = (severity || "").toLowerCase();
-    if (s.includes("fault") || s.includes("critical") || s.includes("danger")) {
+    if (s.includes("fault") || s.includes("critical") || s.includes("danger") || s.includes("エラー") || s.includes("fehler")) {
       return (
         <span className="px-3 py-1 text-xs font-bold rounded-full bg-red-50 border border-red-200 text-red-700 flex items-center gap-1 shadow-sm">
           <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
@@ -86,7 +105,7 @@ export const QuerySection: React.FC = () => {
         </span>
       );
     }
-    if (s.includes("alarm") || s.includes("warn")) {
+    if (s.includes("alarm") || s.includes("warn") || s.includes("警告") || s.includes("warnung")) {
       return (
         <span className="px-3 py-1 text-xs font-bold rounded-full bg-amber-50 border border-amber-300 text-amber-800 flex items-center gap-1 shadow-sm">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
@@ -102,16 +121,28 @@ export const QuerySection: React.FC = () => {
     );
   };
 
+  const langInfo = result?.language_info;
+  const isMultilingualDoc = langInfo && langInfo.document_language !== "en" && langInfo.document_language !== "";
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       {/* Search Input Box */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
-        <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2 mb-2">
-          <Sparkles className="w-5 h-5 text-amber-500" />
-          Ask Diagnostic Question or Search Error Code
-        </h2>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-2">
+          <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+            <Sparkles className="w-5 h-5 text-amber-500" />
+            Ask Diagnostic Question or Search Error Code
+          </h2>
+          
+          {/* Target Output Language Badge */}
+          <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-50 border border-slate-200 text-xs font-semibold text-slate-700">
+            <Globe2 className="w-3.5 h-3.5 text-amber-500" />
+            <span>Output: {LANGUAGE_OPTIONS.find(l => l.id === selectedLanguage)?.label.split(" ")[0]}</span>
+          </div>
+        </div>
+
         <p className="text-sm text-slate-500 mb-6">
-          Enter an industrial error code (e.g. <code className="text-amber-800 font-mono bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-bold">F07900</code>, <code className="text-amber-800 font-mono bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-bold">8013</code>) or describe a machine symptom in natural language.
+          Enter an industrial error code (e.g. <code className="text-amber-800 font-mono bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-bold">F07900</code>, <code className="text-amber-800 font-mono bg-amber-50 border border-amber-200 px-2 py-0.5 rounded font-bold">8013</code>) or ask a question in any language (English, Japanese, German, etc.).
         </p>
 
         <form
@@ -128,15 +159,16 @@ export const QuerySection: React.FC = () => {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="e.g. Fault F07900 or Why is the inverter motor humming loudly?"
+                placeholder="e.g. Fault F07900 or モーターが異常過熱する原因は何ですか？"
                 className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:bg-white focus:ring-2 focus:ring-amber-200 transition-all text-sm shadow-inner"
               />
             </div>
 
+            {/* Machine Selector */}
             <select
               value={selectedMachine}
               onChange={(e) => setSelectedMachine(e.target.value)}
-              className="px-4 py-3.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-amber-500 focus:bg-white cursor-pointer font-medium"
+              className="px-3.5 py-3.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-amber-500 focus:bg-white cursor-pointer font-medium"
             >
               {MACHINE_OPTIONS.map((opt) => (
                 <option key={opt.id} value={opt.id} className="bg-white text-slate-900">
@@ -144,6 +176,22 @@ export const QuerySection: React.FC = () => {
                 </option>
               ))}
             </select>
+
+            {/* Output Language Selector */}
+            <div className="relative">
+              <select
+                value={selectedLanguage}
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                className="px-3.5 py-3.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 text-sm focus:outline-none focus:border-amber-500 focus:bg-white cursor-pointer font-medium"
+                title="Select Output Diagnosis Language"
+              >
+                {LANGUAGE_OPTIONS.map((lang) => (
+                  <option key={lang.id} value={lang.id} className="bg-white text-slate-900">
+                    🌐 {lang.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <button
               type="submit"
@@ -192,6 +240,42 @@ export const QuerySection: React.FC = () => {
         </div>
       )}
 
+      {/* INTERACTIVE MULTILINGUAL PREFERENCE BANNER */}
+      {result && (isMultilingualDoc || (langInfo && langInfo.suggested_languages && langInfo.suggested_languages.length > 1)) && (
+        <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-xl bg-amber-200/60 text-amber-900 shrink-0 mt-0.5">
+              <Languages className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-900">
+                Multilingual Manual Detection
+              </p>
+              <p className="text-xs text-slate-600 mt-0.5">
+                Source manual is in <strong className="text-slate-900">{langInfo?.document_language_name}</strong>. Diagnostic analysis is currently in <strong className="text-slate-900">{langInfo?.target_language_name}</strong>. Which language do you prefer?
+              </p>
+            </div>
+          </div>
+
+          {/* Quick 1-Click Language Switch Buttons */}
+          <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0">
+            {langInfo?.suggested_languages?.map((s) => (
+              <button
+                key={s.code}
+                onClick={() => handleLanguageSwitch(s.code)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shadow-xs border ${
+                  selectedLanguage === s.code
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-700 hover:bg-amber-100 hover:text-amber-950 border-amber-200"
+                }`}
+              >
+                {s.code === "en" ? "Respond in English" : `Respond in ${s.name}`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Diagnostic Result Card */}
       {result && (
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-md space-y-6">
@@ -205,6 +289,12 @@ export const QuerySection: React.FC = () => {
                     {result.machine_detected}
                   </span>
                 )}
+                {langInfo && (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 border border-slate-200 text-slate-700 flex items-center gap-1">
+                    <Globe2 className="w-3 h-3 text-amber-500" />
+                    <span>{langInfo.target_language_name}</span>
+                  </span>
+                )}
               </div>
               {result.error_code && (
                 <p className="text-xs font-mono text-amber-700 mt-1 font-bold">
@@ -213,7 +303,7 @@ export const QuerySection: React.FC = () => {
               )}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               {getSeverityBadge(result.severity)}
               {result.confidence && (
                 <span className="px-3 py-1 text-xs font-bold rounded-full bg-slate-100 border border-slate-300 text-slate-700">
