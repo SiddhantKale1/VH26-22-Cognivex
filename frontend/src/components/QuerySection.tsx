@@ -25,18 +25,20 @@ const MACHINE_OPTIONS = [
 
 const LANGUAGE_OPTIONS = [
   { id: "en", label: "English" },
-  { id: "hi", label: "हिन्दी" },
-  { id: "ja", label: "日本語" },
-  { id: "de", label: "Deutsch" },
-  { id: "es", label: "Español" },
-  { id: "fr", label: "Français" },
-  { id: "zh", label: "中文" },
-  { id: "auto", label: "Auto" },
+  { id: "hi", label: "हिन्दी (Hindi)" },
+  { id: "mr", label: "मराठी (Marathi)" },
+  { id: "ja", label: "日本語 (Japanese)" },
+  { id: "de", label: "Deutsch (German)" },
+  { id: "es", label: "Español (Spanish)" },
+  { id: "fr", label: "Français (French)" },
+  { id: "zh", label: "中文 (Chinese)" },
+  { id: "auto", label: "Auto-Detect" },
 ];
 
 const SPEECH_LANG_MAP: Record<string, string> = {
   en: "en-US",
   hi: "hi-IN",
+  mr: "mr-IN",
   ja: "ja-JP",
   de: "de-DE",
   es: "es-ES",

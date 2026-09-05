@@ -9,6 +9,8 @@ from typing import Dict, List, Optional, Tuple
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "en": "English",
+    "hi": "हिन्दी (Hindi)",
+    "mr": "मराठी (Marathi)",
     "ja": "日本語 (Japanese)",
     "de": "Deutsch (German)",
     "es": "Español (Spanish)",
@@ -17,8 +19,7 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "zh": "中文 (Chinese)",
     "ko": "한국어 (Korean)",
     "pt": "Português (Portuguese)",
-    "ru": "Русский (Russian)",
-    "hi": "हिन्दी (Hindi)"
+    "ru": "Русский (Russian)"
 }
 
 # Unicode Script Ranges
