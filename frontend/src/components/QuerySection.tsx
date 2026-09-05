@@ -23,6 +23,7 @@ const MACHINE_OPTIONS = [
 
 const LANGUAGE_OPTIONS = [
   { id: "en", label: "English (Default)" },
+  { id: "hi", label: "हिन्दी (Hindi)" },
   { id: "ja", label: "日本語 (Japanese)" },
   { id: "de", label: "Deutsch (German)" },
   { id: "es", label: "Español (Spanish)" },
@@ -40,6 +41,11 @@ const PRESET_QUERIES = [
   {
     label: "Drive Humming & Overheating",
     query: "Why is the drive motor humming loudly and overheating at low speeds?",
+    model: "sinamics-drive",
+  },
+  {
+    label: "Fault F07900 (हिन्दी)",
+    query: "ड्राइव मोटर ब्लॉक होने पर फॉल्ट F07900 का क्या कारण है?",
     model: "sinamics-drive",
   },
   {
@@ -97,7 +103,7 @@ export const QuerySection: React.FC = () => {
 
   const getSeverityBadge = (severity: string) => {
     const s = (severity || "").toLowerCase();
-    if (s.includes("fault") || s.includes("critical") || s.includes("danger") || s.includes("エラー") || s.includes("fehler")) {
+    if (s.includes("fault") || s.includes("critical") || s.includes("danger") || s.includes("エラー") || s.includes("fehler") || s.includes("दोष") || s.includes("खराबी") || s.includes("फॉल्ट")) {
       return (
         <span className="px-3 py-1 text-xs font-bold rounded-full bg-red-50 border border-red-200 text-red-700 flex items-center gap-1 shadow-sm">
           <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
@@ -105,7 +111,7 @@ export const QuerySection: React.FC = () => {
         </span>
       );
     }
-    if (s.includes("alarm") || s.includes("warn") || s.includes("警告") || s.includes("warnung")) {
+    if (s.includes("alarm") || s.includes("warn") || s.includes("警告") || s.includes("warnung") || s.includes("चेतावनी")) {
       return (
         <span className="px-3 py-1 text-xs font-bold rounded-full bg-amber-50 border border-amber-300 text-amber-800 flex items-center gap-1 shadow-sm">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
