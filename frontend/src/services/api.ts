@@ -232,6 +232,140 @@ export const deleteDocument = async (filename: string): Promise<{ status: string
     return response.data;
 };
 
+export interface QueryRecord {
+    query_id: string;
+    timestamp: string;
+    question: string;
+    selected_machine?: string | null;
+    status: string;
+    error_code?: string | null;
+    machine_detected?: string;
+    severity: string;
+    confidence_level: string;
+    confidence_score: number;
+    meaning?: string;
+    causes_count: number;
+    actions_count: number;
+    citations_count: number;
+    response_time_ms: number;
+}
+
+export interface QueryAnalyticsMetrics {
+    total_queries: number;
+    average_response_time_ms: number;
+    average_confidence_score: number;
+    severity_distribution: {
+        critical_faults: number;
+        warnings_alarms: number;
+        guides_procedures: number;
+        insufficient_data: number;
+    };
+    machine_distribution: Record<string, number>;
+    confidence_distribution: {
+        high: number;
+        medium: number;
+        low: number;
+        insufficient: number;
+    };
+    top_error_codes: { error_code: string; count: number; machine: string }[];
+}
+
+export interface PostgresStatus {
+    connected: boolean;
+    version?: string;
+    manuals_count?: number;
+    database?: string;
+    host?: string;
+    error?: string;
+}
+
+export interface PostgresManual {
+    id: string;
+    filename: string;
+    machine_family: string;
+    file_size_bytes: number;
+    total_pages: number;
+    mime_type: string;
+    status: string;
+    uploaded_at: string;
+}
+
+// Fetch persistent query transactions
+export const getQueryHistory = async (limit: number = 50): Promise<QueryRecord[]> => {
+    try {
+        const response = await api.get(`/api/analytics/history?limit=${limit}`);
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching query history:", error);
+        return [];
+    }
+};
+
+// Fetch chart-ready query analytics metrics
+export const getQueryMetrics = async (): Promise<QueryAnalyticsMetrics> => {
+    try {
+        const response = await api.get("/api/analytics/metrics");
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching query metrics:", error);
+        return {
+            total_queries: 0,
+            average_response_time_ms: 0,
+            average_confidence_score: 0,
+            severity_distribution: {
+                critical_faults: 0,
+                warnings_alarms: 0,
+                guides_procedures: 0,
+                insufficient_data: 0,
+            },
+            machine_distribution: {},
+            confidence_distribution: { high: 0, medium: 0, low: 0, insufficient: 0 },
+            top_error_codes: [],
+        };
+    }
+};
+
+// Clear persistent query logs
+export const clearQueryHistory = async (): Promise<boolean> => {
+    try {
+        await api.delete("/api/analytics/history");
+        return true;
+    } catch (error) {
+        console.error("Error clearing query history:", error);
+        return false;
+    }
+};
+
+// Get PostgreSQL health & manuals status
+export const getPostgresStatus = async (): Promise<PostgresStatus> => {
+    try {
+        const response = await api.get("/api/postgres/status");
+        return response.data;
+    } catch (error: any) {
+        return {
+            connected: false,
+            error: error.message || "Failed to reach PostgreSQL endpoint",
+        };
+    }
+};
+
+// Get list of manuals from PostgreSQL
+export const getPostgresManuals = async (): Promise<PostgresManual[]> => {
+    try {
+        const response = await api.get("/api/manuals");
+        return response.data;
+    } catch (error) {
+        console.error("Error fetching PostgreSQL manuals:", error);
+        return [];
+    }
+};
+
+// Get streamable URL for PDF viewing
+export const getManualStreamUrl = (docId: string): string => {
+    const base = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
+    return `${base}/api/manuals/${encodeURIComponent(docId)}/stream`;
+};
+
 export interface SystemStats {
     total_documents: number;
     total_chunks: number;

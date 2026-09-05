@@ -9,12 +9,24 @@ import {
   HardDrive, 
   Layers, 
   ShieldCheck,
-  Trash2
+  Trash2,
+  Database,
+  ExternalLink,
+  FileCheck
 } from "lucide-react";
-import { getDocuments, uploadDocument, deleteDocument, type DocumentInfo } from "../services/api";
+import { 
+  getDocuments, 
+  uploadDocument, 
+  deleteDocument, 
+  getPostgresStatus,
+  getManualStreamUrl,
+  type DocumentInfo,
+  type PostgresStatus
+} from "../services/api";
 
 export const UploadSection: React.FC = () => {
   const [documents, setDocuments] = useState<DocumentInfo[]>([]);
+  const [pgStatus, setPgStatus] = useState<PostgresStatus | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [uploading, setUploading] = useState<boolean>(false);
   const [deletingFilename, setDeletingFilename] = useState<string | null>(null);
@@ -22,6 +34,7 @@ export const UploadSection: React.FC = () => {
     type: "success" | "error" | null;
     message: string;
     chunks?: number;
+    docId?: string;
   }>({ type: null, message: "" });
   const [dragActive, setDragActive] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -29,8 +42,12 @@ export const UploadSection: React.FC = () => {
   const fetchDocs = async () => {
     setLoading(true);
     try {
-      const docs = await getDocuments();
+      const [docs, pg] = await Promise.all([
+        getDocuments(),
+        getPostgresStatus(),
+      ]);
       setDocuments(docs);
+      setPgStatus(pg);
     } catch (err) {
       console.error(err);
     } finally {
@@ -58,7 +75,7 @@ export const UploadSection: React.FC = () => {
       const res = await uploadDocument(file);
       setUploadStatus({
         type: "success",
-        message: res.message || `Successfully ingested "${file.name}"`,
+        message: res.message || `Successfully stored "${file.name}" in PostgreSQL and indexed into ChromaDB.`,
         chunks: res.chunks_added,
       });
       await fetchDocs();
@@ -127,26 +144,51 @@ export const UploadSection: React.FC = () => {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {/* PostgreSQL Storage Banner */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 flex items-center justify-center text-blue-700 shrink-0">
+            <Database className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-slate-900">PostgreSQL Raw PDF Storage Layer</h3>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                pgStatus?.connected 
+                  ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                  : "bg-amber-100 text-amber-800 border border-amber-300"
+              }`}>
+                {pgStatus?.connected ? "● PostgreSQL Connected" : "● Local Fallback Active"}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Target Table: <code className="font-mono text-slate-700 font-bold">raw_manuals (BYTEA)</code> • DB: <code className="font-mono text-slate-700 font-bold">{pgStatus?.database || "cognivex_rag"}</code> • Direct binary streaming enabled
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={fetchDocs}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 cursor-pointer shadow-xs shrink-0"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-amber-500" : ""}`} />
+          Sync Database
+        </button>
+      </div>
+
       {/* Upload Zone */}
       <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
               <UploadCloud className="w-6 h-6 text-amber-500" />
-              Upload Machine Manual
+              Upload & Ingest Machine Manual
             </h2>
             <p className="text-sm text-slate-500">
-              Upload PDF operating instructions, system manuals, or fault catalogs. Text will be extracted, chunked, and embedded into ChromaDB automatically.
+              Upload PDF operating instructions, system manuals, or fault catalogs. Manuals are persisted into PostgreSQL and automatically vectorized into ChromaDB.
             </p>
           </div>
-          <button
-            onClick={fetchDocs}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 cursor-pointer shadow-xs"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin text-amber-500" : ""}`} />
-            Refresh Library
-          </button>
         </div>
 
         <div
@@ -173,7 +215,7 @@ export const UploadSection: React.FC = () => {
             <div className="flex flex-col items-center justify-center py-4 space-y-3">
               <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
               <p className="text-sm font-bold text-slate-900">
-                Extracting pages, generating embeddings & indexing into ChromaDB...
+                Storing in PostgreSQL, extracting text & indexing into ChromaDB...
               </p>
               <p className="text-xs text-slate-500">This may take 10–30 seconds for large multi-hundred-page PDFs.</p>
             </div>
@@ -225,10 +267,10 @@ export const UploadSection: React.FC = () => {
           <div>
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <HardDrive className="w-5 h-5 text-amber-500" />
-              Active Knowledge Base ({documents.length} Manuals)
+              Database Knowledge Base ({documents.length} Manuals)
             </h3>
             <p className="text-xs text-slate-500">
-              Technical manuals currently parsed and searchable via hybrid dense vector & BM25 retrieval.
+              Technical manuals stored in database and searchable via hybrid dense vector & BM25 retrieval.
             </p>
           </div>
         </div>
@@ -236,7 +278,7 @@ export const UploadSection: React.FC = () => {
         {loading ? (
           <div className="flex items-center justify-center py-12 text-slate-500 gap-2">
             <Loader2 className="w-5 h-5 animate-spin text-amber-500" />
-            <span>Loading indexed manuals...</span>
+            <span>Loading database manuals...</span>
           </div>
         ) : documents.length === 0 ? (
           <div className="text-center py-12 text-slate-500">
@@ -247,6 +289,7 @@ export const UploadSection: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {documents.map((doc) => {
               const isDeleting = deletingFilename === (doc.filename || doc.name);
+              const streamUrl = getManualStreamUrl(doc.filename || doc.name);
 
               return (
                 <div
@@ -265,6 +308,17 @@ export const UploadSection: React.FC = () => {
                           <ShieldCheck className="w-3 h-3 text-emerald-600" />
                           Ready
                         </span>
+
+                        {/* Stream PDF in browser */}
+                        <a
+                          href={streamUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="Stream and view original PDF in browser"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-blue-700 hover:bg-blue-50 border border-transparent hover:border-blue-200 transition-all"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
 
                         {/* Delete Button */}
                         <button
@@ -288,8 +342,9 @@ export const UploadSection: React.FC = () => {
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
-                    <span className="truncate max-w-[200px]" title={doc.filename}>
-                      📄 {doc.filename || doc.name}
+                    <span className="truncate max-w-[200px] flex items-center gap-1" title={doc.filename}>
+                      <FileCheck className="w-3.5 h-3.5 text-slate-400" />
+                      {doc.filename || doc.name}
                     </span>
                     <span className="text-slate-600 font-mono text-[11px]">
                       {doc.manufacturer} • {doc.version}

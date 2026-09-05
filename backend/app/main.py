@@ -1,11 +1,16 @@
+import io
 import logging
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
+import time
 from app.generation.generator import RAGGenerator
+from app.storage.history import query_history_logger
+from app.storage.postgres_store import postgres_store
 
 # Load environment variables
 load_dotenv()
@@ -18,12 +23,18 @@ logger = logging.getLogger("machine-assistant-api")
 
 from contextlib import asynccontextmanager
 
-# Pre-warm RAG Generator on server startup so first queries respond instantly
+# Pre-warm RAG Generator and PostgreSQL on server startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Pre-warming RAG Generator and ChromaDB model...")
     get_generator()
     logger.info("RAG Generator is pre-warmed and ready.")
+    try:
+        logger.info("Initializing PostgreSQL Document Store...")
+        res = postgres_store.initialize_database()
+        logger.info(f"PostgreSQL store status: {res.get('status')} (db: {res.get('database')})")
+    except Exception as e:
+        logger.warning(f"PostgreSQL auto-initialization notice: {e}")
     yield
 
 app = FastAPI(
@@ -142,12 +153,48 @@ def get_demo_scenarios():
 def handle_query(req: QueryRequest):
     if not req.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
+    
+    start_time = time.time()
     gen = get_generator()
-    return gen.generate_answer(
+    response = gen.generate_answer(
         question=req.question,
         machine_model=req.machine_model,
         history=req.history
     )
+    latency_ms = (time.time() - start_time) * 1000
+
+    # Persist input and output transaction to disk
+    try:
+        query_history_logger.log_query(
+            question=req.question,
+            machine_model=req.machine_model,
+            diagnostic_response=response,
+            latency_ms=latency_ms
+        )
+    except Exception as e:
+        logger.error(f"Failed to log query transaction: {e}")
+
+    return response
+
+
+@app.get("/api/analytics/history")
+def get_query_history(limit: int = 50):
+    """Retrieve persistent historical query input/output records."""
+    records = query_history_logger.get_all_records()
+    return records[:limit]
+
+
+@app.get("/api/analytics/metrics")
+def get_query_metrics():
+    """Retrieve visual-ready aggregated metrics (severity donut, machine bar, confidence breakdown)."""
+    return query_history_logger.get_analytics_metrics()
+
+
+@app.delete("/api/analytics/history")
+def clear_query_history():
+    """Clear all stored query input/output logs."""
+    success = query_history_logger.clear_history()
+    return {"status": "success" if success else "error", "message": "Query history cleared."}
 
 
 @app.post("/api/errors")
@@ -163,7 +210,7 @@ def handle_error_analysis(req: ErrorRequest):
 
 @app.post("/api/upload")
 async def upload_document(file: UploadFile = File(...)):
-    """Upload a new PDF machine manual, extract text, generate embeddings, and index into ChromaDB."""
+    """Upload a new PDF machine manual, persist in PostgreSQL, extract text, and index into ChromaDB."""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF manual files (.pdf) are supported.")
     
@@ -172,9 +219,22 @@ async def upload_document(file: UploadFile = File(...)):
     raw_dir.mkdir(parents=True, exist_ok=True)
     
     save_path = raw_dir / file.filename
+    content = await file.read()
     with open(save_path, "wb") as f:
-        content = await file.read()
         f.write(content)
+
+    # Persist raw PDF binary directly into PostgreSQL raw_manuals table
+    pg_record = None
+    try:
+        pg_record = postgres_store.save_manual(
+            filename=file.filename,
+            content=content,
+            machine_family="Industrial Equipment",
+            status="ingested"
+        )
+        logger.info(f"Persisted '{file.filename}' into PostgreSQL raw_manuals table (ID: {pg_record['id']})")
+    except Exception as pg_err:
+        logger.warning(f"Could not persist {file.filename} to PostgreSQL: {pg_err}")
         
     try:
         from app.ingestion.pipeline import ingest_document
@@ -191,12 +251,70 @@ async def upload_document(file: UploadFile = File(...)):
         return {
             "status": "success",
             "filename": file.filename,
+            "document_id": pg_record.get("id") if pg_record else None,
+            "stored_in_postgres": pg_record is not None,
             "chunks_added": len(new_chunks),
-            "message": f"Successfully ingested '{file.filename}' ({len(new_chunks)} chunks indexed)."
+            "message": f"Successfully stored in PostgreSQL and indexed '{file.filename}' ({len(new_chunks)} chunks indexed)."
         }
     except Exception as e:
         logger.error(f"Failed to ingest uploaded document {file.filename}: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to process PDF manual: {str(e)}")
+
+
+@app.get("/api/postgres/status")
+def get_postgres_status():
+    """Returns PostgreSQL connection status, database name, and stored manuals count."""
+    return postgres_store.test_connection()
+
+
+@app.get("/api/manuals")
+def list_postgres_manuals():
+    """List all PDF manuals stored in PostgreSQL raw_manuals table."""
+    pg_manuals = postgres_store.list_manuals()
+    if pg_manuals:
+        return pg_manuals
+    # Fallback to local raw documents if PG is uninitialized
+    return list_documents()
+
+
+@app.get("/api/manuals/{doc_id}/stream")
+def stream_manual_pdf(doc_id: str):
+    """Streams raw PDF binary bytes directly from PostgreSQL BYTEA column."""
+    result = postgres_store.get_manual_bytes(doc_id)
+    if not result:
+        # Also check by filename if doc_id happens to be a filename
+        all_manuals = postgres_store.list_manuals()
+        for m in all_manuals:
+            if m.get("filename") == doc_id or m.get("id") == doc_id:
+                result = postgres_store.get_manual_bytes(m["id"])
+                break
+    
+    if not result:
+        # Fallback to local disk file if not in DB
+        base_dir = Path(__file__).resolve().parents[1]
+        raw_dir = base_dir / "data" / "raw"
+        local_path = raw_dir / doc_id
+        if not local_path.exists() and not (raw_dir / f"{doc_id}.pdf").exists():
+            raise HTTPException(status_code=404, detail="Manual not found in PostgreSQL or disk storage.")
+        target = local_path if local_path.exists() else (raw_dir / f"{doc_id}.pdf")
+        with open(target, "rb") as f:
+            pdf_bytes = f.read()
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{target.name}"'}
+        )
+    
+    pdf_bytes, filename, mime_type = result
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type=mime_type or "application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"',
+            "Content-Length": str(len(pdf_bytes)),
+            "Cache-Control": "public, max-age=86400"
+        }
+    )
 
 
 @app.get("/api/documents")
